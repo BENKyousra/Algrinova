@@ -1,24 +1,81 @@
+import 'package:algrinova/l10n/generated/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:algrinova/home_screen.dart';
+import 'package:algrinova/screens/home/home_screen.dart';
+import 'package:algrinova/screens/profile/profile_screen.dart';
+import 'package:algrinova/screens/login/login_screen.dart';
+import 'package:algrinova/screens/experts/experts_screen.dart';
+import 'package:algrinova/screens/store/store_screen.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
-void main() {
-   // Rendre la barre de statut transparente
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Rendre la barre de statut transparente
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-    statusBarColor: const Color.fromARGB(0, 255, 255, 255), // 🔥 Rend la barre de statut transparente
-    statusBarIconBrightness: Brightness.light, // Icônes en blanc (utilise `dark` pour les avoir en noir)
-    systemNavigationBarColor: const Color.fromARGB(255, 0, 0, 0), // Changer la couleur de la barre de navigation en bas
-    systemNavigationBarIconBrightness: Brightness.light, // Icônes en blanc
+    statusBarColor: const Color.fromARGB(0, 255, 255, 255),
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: const Color.fromARGB(255, 0, 0, 0),
+    systemNavigationBarIconBrightness: Brightness.light,
   ));
+
   runApp(AlgrinovaApp());
 }
 
-class AlgrinovaApp extends StatelessWidget {
+class AlgrinovaApp extends StatefulWidget {
+  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+  static final localeNotifier = ValueNotifier<Locale>(Locale('en')); // Valeur initiale : Français
+
+  @override
+  State<AlgrinovaApp> createState() => _AlgrinovaAppState();
+}
+
+class _AlgrinovaAppState extends State<AlgrinovaApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: HomeScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AlgrinovaApp.themeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          locale: AlgrinovaApp.localeNotifier.value,
+          supportedLocales: const [
+            Locale('fr'), // Français
+            Locale('ar'), // Arabe
+            Locale('en'), // Anglais
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            AppLocalizations.delegate,// N'oublie pas d'ajouter la localisation custom
+          ],
+          themeMode: currentMode,  // Utilisation de themeMode ici
+          theme: ThemeData(
+            brightness: Brightness.light,
+            fontFamily: 'Quicksand',
+            primaryColor:  Color.fromARGB(255, 255, 255, 255), // Couleur principale de l'application
+            // colorScheme: ColorScheme.fromSwatch().copyWith(secondary: Color.fromARGB(255, 0, 143, 48)), // Couleur pour les éléments interactifs
+            textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 0, 143, 48)), // Couleur des TextButton
+    ),
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            fontFamily: 'Quicksand',
+          ),
+          debugShowCheckedModeBanner: false,
+          initialRoute: '/profile',
+          routes: {
+            '/home': (context) => HomeScreen(),
+            '/experts': (context) => ExpertsScreen(),
+            '/store': (context) => StoreScreen(),
+            '/profile': (context) => ProfileScreen(),
+            '/login': (context) => LoginScreen(),
+          },
+          home: HomeScreen(),
+        );
+      },
     );
   }
 }

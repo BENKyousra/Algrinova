@@ -11,12 +11,19 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  image_picker: ^1.0.7
+  provider: ^6.1.1
+  intl: ^0.19.0
+  geolocator: ^10.0.0
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.3
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  intl_utils: ^2.0.0
 
 dependency_overrides:
   material_color_utilities: ^0.12.0
@@ -40,9 +47,19 @@ flutter:
     - assets/images/pexels-mlkbnl-10251392.jpg
     - assets/images/pexels-pixabay-206876.jpg
     - assets/images/pexels-dacapture-13734919.jpg
-    - assets/images/frame.png
     - assets/images/blur.png
-    - assets/images/blur2.png
+    - assets/images/pexels-olly-3756616.jpg
+    - assets/images/pexels-nati-87264186-21939593.jpg
+    - assets/images/pexels-grace-2149231246-30505217.jpg
+    - assets/images/pexels-merictuna-30487734.jpg
+    - assets/images/pexels-merictuna-30132057.jpg
+    - assets/images/roses.jpg
+    - assets/images/poste_algerie.png
+    - assets/images/rose seed.jpg
+    - assets/images/pexels-pixabay-159445.jpg
+    - assets/images/pexels-alice1-30518938.jpg
+    - assets/images/vecteezy_young-bright-green-zucchini-sprout-in-a-peat-pot_48836315.jpg
+    
 
   fonts:
     - family: Righteous
@@ -53,3 +70,15 @@ flutter:
       fonts:
         - asset: assets/fonts/Lobster-Regular.ttf
           weight: 700
+    - family: Quicksand
+      fonts:
+        - asset: assets/fonts/Quicksand-VariableFont_wght.ttf
+          weight: 700
+
+flutter_intl:  # ✅ Ajoute ceci à la fin du fichier
+  enabled: true
+  arb_dir: lib/l10n
+  output_dir: lib/l10n/generated
+  class_name: AppLocalizations
+  main_locale: fr
+  

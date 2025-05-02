@@ -1,0 +1,21 @@
+{
+    "@@locale": "ar",
+    "appTitle": "تطبيق Flutter",
+    "helloWorld": "مرحبا بالعالم",
+    "welcomeMessage": "مرحبًا بك في تطبيق Flutter!",
+    "goodbye": "وداعا",
+    "thankYou": "شكرا لك",
+    "yes": "نعم",
+    "no": "لا",
+    "maybe": "ربما",
+    "pleaseWait": "يرجى الانتظار...",
+    "loading": "جار التحميل...",
+    "errorOccurred": "حدث خطأ ما.",
+    "retry": "إعادة المحاولة",
+    "settings": "الإعدادات",
+    "parameter": "معلمة",
+    "language": "اللغة",
+    "darkMode": "الوضع المظلم",
+    "lightMode": "الوضع الفاتح",
+    "notifications": "الإشعارات"  
+}

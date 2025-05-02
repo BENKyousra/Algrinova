@@ -1,0 +1,8 @@
+{
+    "@@locale": "fr",
+    "hello": "Bonjour",
+    "@hello": {
+      "description": "Salutation simple"
+    }
+  }
+  
