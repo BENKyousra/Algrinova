@@ -1,4 +1,5 @@
 import 'package:algrinova/l10n/generated/l10n.dart';
+import 'package:algrinova/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:algrinova/screens/home/home_screen.dart';
@@ -7,11 +8,15 @@ import 'package:algrinova/screens/login/login_screen.dart';
 import 'package:algrinova/screens/experts/experts_screen.dart';
 import 'package:algrinova/screens/store/store_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:algrinova/provider/cart_provider.dart';
+import 'package:algrinova/screens/chat/chat_screen.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await Firebase.initializeApp();
   // Rendre la barre de statut transparente
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
     statusBarColor: const Color.fromARGB(0, 255, 255, 255),
@@ -20,7 +25,17 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
-  runApp(AlgrinovaApp());
+  runApp(MultiProvider(
+    
+      providers: [
+        ChangeNotifierProvider<AuthService>(  // Utilisation de ChangeNotifierProvider ici
+          create: (_) => AuthService(),
+        ),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: AlgrinovaApp(),
+    ),
+  );
 }
 
 class AlgrinovaApp extends StatefulWidget {
@@ -65,11 +80,12 @@ class _AlgrinovaAppState extends State<AlgrinovaApp> {
             fontFamily: 'Quicksand',
           ),
           debugShowCheckedModeBanner: false,
-          initialRoute: '/profile',
+          initialRoute: '/home',
           routes: {
             '/home': (context) => HomeScreen(),
             '/experts': (context) => ExpertsScreen(),
             '/store': (context) => StoreScreen(),
+            '/chat': (context) => ChatScreen(),
             '/profile': (context) => ProfileScreen(),
             '/login': (context) => LoginScreen(),
           },

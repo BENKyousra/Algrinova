@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   @override
@@ -9,11 +10,25 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  
+  Future<void> _reauthenticate(String oldPassword) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) {
+      throw FirebaseAuthException(code: 'no-user', message: 'Aucun utilisateur connecté.');
+    }
 
-  void _changePassword() {
-    String oldPassword = _oldPasswordController.text;
-    String newPassword = _newPasswordController.text;
-    String confirmPassword = _confirmPasswordController.text;
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: oldPassword,
+    );
+
+    await user.reauthenticateWithCredential(credential);
+  }
+
+  Future<void> _changePassword() async {
+    String oldPassword = _oldPasswordController.text.trim();
+    String newPassword = _newPasswordController.text.trim();
+    String confirmPassword = _confirmPasswordController.text.trim();
 
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -22,67 +37,82 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    // TODO: Ajouter ici la logique de vérification et mise à jour du mot de passe via Firebase ou autre backend
+    try {
+      await _reauthenticate(oldPassword);
+      await FirebaseAuth.instance.currentUser!.updatePassword(newPassword);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Mot de passe mis à jour avec succès.")),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Mot de passe mis à jour avec succès.")),
+      );
+      Navigator.pop(context);
+    } on FirebaseAuthException catch (e) {
+      String message = "Erreur : ${e.message}";
+      if (e.code == 'wrong-password') message = "Ancien mot de passe incorrect.";
+      if (e.code == 'weak-password') message = "Le nouveau mot de passe est trop faible.";
+      if (e.code == 'requires-recent-login') message = "Veuillez vous reconnecter.";
 
-    // Facultatif : Revenir à l'écran précédent
-    Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Changer le mot de passe"),
-      ),
+      appBar: AppBar(title: Text("Change Password", style: TextStyle(color:Colors.black,fontWeight: FontWeight.bold, ))),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _oldPasswordController,
-              obscureText: true,
-              decoration: InputDecoration(
-      labelText: 'Old password',
-      labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
-      focusedBorder: UnderlineInputBorder(
-        borderSide: BorderSide(color: Color.fromARGB(255, 0, 143, 48)), // Couleur de la ligne lorsqu'il est focus
-      ),
-    ),
-    cursorColor: Colors.black,
-    style: TextStyle(color: Colors.black),
-            ),
-            TextField(
-              controller: _newPasswordController,
-              obscureText: true,
-              decoration: InputDecoration(
-      labelText: 'New password',
-      labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
-      focusedBorder: UnderlineInputBorder(
-        borderSide: BorderSide(color: Color.fromARGB(255, 0, 143, 48)), // Couleur de la ligne lorsqu'il est focus
-      ),
-    ),
-    cursorColor: Colors.black,
-    style: TextStyle(color: Colors.black),
-            ),
-            TextField(
-              controller: _confirmPasswordController,
-              obscureText: true,
-              decoration: InputDecoration(
-      labelText: 'Confirm password',  
-      labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
-      focusedBorder: UnderlineInputBorder(
-        borderSide: BorderSide(color: Color.fromARGB(255, 0, 143, 48)), // Couleur de la ligne lorsqu'il est focus
-      ),
-    ),
-    cursorColor: Colors.black,
-    style: TextStyle(color: Colors.black),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: _oldPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                labelText: 'Current Password',
+                labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
+                focusColor: Color.fromARGB(255, 0, 143, 48),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                      color: Color.fromARGB(255, 0, 143, 48)),
+                ),
+              ),
+              cursorColor: Color.fromARGB(255, 0, 143, 48),
+              textInputAction: TextInputAction.done,
+              ),
+              SizedBox(height: 20),
+              TextField(
+                controller: _oldPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                labelText: 'New Password',
+                labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
+                focusColor: Color.fromARGB(255, 0, 143, 48),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                      color: Color.fromARGB(255, 0, 143, 48)),
+                ),
+              ),
+              cursorColor: Color.fromARGB(255, 0, 143, 48),
+              textInputAction: TextInputAction.done,
+              ),
+              TextField(
+                controller: _oldPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                labelText: 'Confirm New Password',
+                labelStyle: TextStyle(color: Color.fromARGB(255, 0, 143, 48)),
+                focusColor: Color.fromARGB(255, 0, 143, 48),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                      color: Color.fromARGB(255, 0, 143, 48)),
+                ),
+              ),
+              cursorColor: Color.fromARGB(255, 0, 143, 48),
+              textInputAction: TextInputAction.done,
+              ),
+              SizedBox(height: 30),
+              ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
@@ -91,10 +121,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
               ),
               onPressed: _changePassword,
-              child: Text("Mettre à jour le mot de passe",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
-          ],
+              
+            ],
+          ),
         ),
       ),
     );

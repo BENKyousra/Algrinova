@@ -44,8 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const SizedBox(height: 10),
           ListTile(
+            title: Text(
+              'Edit Profile'),
             leading: Icon(Icons.person),
-            title: Text('Edit Profile'),
             onTap: () {
               Navigator.push(
   context,

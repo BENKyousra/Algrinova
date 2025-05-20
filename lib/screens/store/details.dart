@@ -298,9 +298,13 @@ class _DetailsState extends State<Details> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 200,
+                  maxHeight: 400,
+                ),
                 decoration: BoxDecoration(
                   // ignore: deprecated_member_use
-                  color: Colors.white.withOpacity(0.85),
+                  color: Color.fromARGB(255, 255, 255, 255),
                 ),
                 padding: const EdgeInsets.all(25),
                 child: Column(
@@ -322,7 +326,7 @@ class _DetailsState extends State<Details> {
                     const SizedBox(height: 25),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 0, 41, 14),
+                        backgroundColor: Color.fromARGB(255, 0, 143, 48),
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),

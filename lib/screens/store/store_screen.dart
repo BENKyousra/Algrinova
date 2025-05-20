@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/screens/store/details.dart'; // تأكد من أن المسار صحيح
 import 'package:algrinova/models/product.dart';
-// import 'package:group_button/group_button.dart';
+import 'package:group_button/group_button.dart';
 // import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'cart_screen.dart'; // Ensure this file contains the CartScreen class
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
@@ -20,6 +20,7 @@ class _StoreScreenState extends State<StoreScreen> {
   // عناصر التحكم في التمرير وظهور الأدوات
   final ScrollController _scrollController = ScrollController();
   bool _isVisible = true;
+  final GroupButtonController _groupController = GroupButtonController();
   bool _showGroupButtons = true;
   String _selectedCategory = 'All';
   String _searchQuery = '';
@@ -111,7 +112,7 @@ class _StoreScreenState extends State<StoreScreen> {
     super.initState();
     // تعيين "All" كمحدد افتراضي
     _selectedCategory = 'All'; // تأكد من أن هذه القيمة مطابقة للزر في القائمة
- // تحديد الزر الأول (All)
+    // تحديد الزر الأول (All)
     // إخفاء المؤشر عند الضغط على زر الرجوع
     _searchFocusNode.addListener(() {
       if (!_searchFocusNode.hasFocus) {
@@ -155,14 +156,10 @@ class _StoreScreenState extends State<StoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: CustomBottomNavBar(
-  context: context,
-  currentIndex: 3,
-),
+        context: context,
+        currentIndex: 3,
+      ),
       extendBody: true,
-      backgroundColor: Colors.white,
-
-      // شريط التنقل السفلي المنحني
-
       // محتوى الصفحة
       body: Stack(
         children: [
@@ -175,9 +172,13 @@ class _StoreScreenState extends State<StoreScreen> {
                 child: _buildCurvedHeader(),
               ),
 
+              _buildGroupButtons(),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 0,
+                  ),
                   child: GridView.builder(
                     controller: _scrollController,
                     gridDelegate:
@@ -261,16 +262,57 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 
+  Widget _buildGroupButtons() {
+    if (!_showGroupButtons) return SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: GroupButton(
+          controller: _groupController,
+          isRadio: true,
+          buttons: const [
+            'All',
+            'Seeds',
+            'Seedlings',
+            'Accessories',
+            'Tools',
+            'Plants',
+            'Soil',
+            'Fertilizers',
+          ],
+          onSelected: (text, index, isSelected) {
+            setState(() {
+              _selectedCategory = text;
+            });
+          },
+          options: GroupButtonOptions(
+            borderRadius: BorderRadius.circular(20),
+            spacing: 8,
+            selectedTextStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            selectedColor: Colors.black,
+            unselectedTextStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+            unselectedColor: Color.fromARGB(255, 217, 217, 217),
+          ),
+        ),
+      ),
+    );
+  }
+
   // دالة لعرض بطاقة المنتج
   Widget _buildProductCard(Product product) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [
-          BoxShadow(blurRadius: 5, offset: Offset(1, 1), color: Colors.grey),
-        ],
-      ),
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      elevation: 4,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -405,13 +447,12 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 
-  // أزرار التصنيفات
   // Widget _buildGroupButtons() {
   //   return AnimatedContainer(
   //     duration: const Duration(milliseconds: 300),
   //     height: _showGroupButtons ? 50 : 0,
   //     child: Padding(
-  //       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 2),
+  //       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
   //       child: SingleChildScrollView(
   //         scrollDirection: Axis.horizontal,
   //         child: GroupButton(
@@ -435,19 +476,19 @@ class _StoreScreenState extends State<StoreScreen> {
 
   //           options: GroupButtonOptions(
   //             borderRadius: BorderRadius.circular(20),
-  //             spacing: 10,
+  //             spacing: 8,
   //             selectedTextStyle: const TextStyle(
-  //               fontFamily: 'QuickSand',
-  //               fontSize: 16,
+  //               fontSize: 14,
+  //               fontWeight: FontWeight.bold,
   //               color: Colors.white,
   //             ),
   //             selectedColor: Colors.black,
   //             unselectedTextStyle: const TextStyle(
-  //               fontFamily: 'QuickSand',
   //               fontSize: 14,
+  //               fontWeight: FontWeight.bold,
   //               color: Colors.black,
   //             ),
-  //             unselectedColor: const Color.fromARGB(240, 235, 228, 228),
+  //             unselectedColor:  Color.fromARGB(255, 206, 206, 206),
   //           ),
   //         ),
   //       ),
