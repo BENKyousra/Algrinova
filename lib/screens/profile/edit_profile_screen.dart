@@ -17,7 +17,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? _imageFile;
   String _photoUrl = ''; // Variable pour stocker l'URL de la photo
   bool _isLoading = true;
-  bool _isPickingImage = false;
 
 
   final ImagePicker _picker = ImagePicker();
@@ -60,11 +59,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // Méthode pour sélectionner une nouvelle photo
   Future<void> _pickImage() async {
-  if (_isPickingImage) return; // Empêche les appels multiples
-  
-  setState(() {
-    _isPickingImage = true;
-  });
 
   try {
     final XFile? pickedImage = await _picker.pickImage(
@@ -80,9 +74,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   } catch (e) {
     print("Erreur lors de la sélection de l'image : $e");
   } finally {
-    setState(() {
-      _isPickingImage = false;
-    });
+    // Afficher un message de confirmation ou d'erreur
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Image sélectionnée')),
+    );
   }
 
 }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
+import 'package:algrinova/screens/experts/experts_profile_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+
 
 class ExpertsScreen extends StatefulWidget {
   @override
@@ -8,12 +12,14 @@ class ExpertsScreen extends StatefulWidget {
 }
 
 class Expert {
+  final String id;
   final String name;
   final String specialty;
   final double rating;
   final String imagePath;
 
   Expert({
+    required this.id,
     required this.name,
     required this.specialty,
     required this.rating,
@@ -33,49 +39,12 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
   bool _isSortActive = false;
 
 
-  final List<Expert> _experts = [
-    Expert(
-      name: "Dr. Nadia B.",
-      specialty: "Agronome spécialiste des sols",
-      rating: 4.8,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-    Expert(
-      name: "Yacine M.",
-      specialty: "Ingénieur en irrigation",
-      rating: 3.5,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-    Expert(
-      name: "Amina L.",
-      specialty: "Conseillère en culture bio",
-      rating: 2,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-    // Répétitions pour test défilement
-    Expert(
-      name: "Dr. Nadia B.",
-      specialty: "Agronome spécialiste des sols",
-      rating: 4.8,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-    Expert(
-      name: "Yacine M.",
-      specialty: "Ingénieur en irrigation",
-      rating: 3.5,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-    Expert(
-      name: "Amina L.",
-      specialty: "Conseillère en culture bio",
-      rating: 2,
-      imagePath: "assets/images/pexels-dacapture-13734919.jpg",
-    ),
-  ];
+   List<Expert> _experts = [];
 
   @override
   void initState() {
     super.initState();
+    _loadExperts();
     _scrollController.addListener(() {
       if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
         if (_isVisible) {
@@ -101,8 +70,41 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
     super.dispose();
   }
 
-  Widget _buildExpertCard(Expert expert) {
-    return Card(
+  Future<void> _loadExperts() async {
+  final querySnapshot = await FirebaseFirestore.instance
+      .collection('users')
+      .where('role', isEqualTo: 'expert')  // Filtre sur le rôle expert
+      .get();
+
+ List<Expert> experts = querySnapshot.docs.map((doc) {
+  final data = doc.data();
+  return Expert(
+    id: doc.id,
+    name: data['name'] ?? '',
+    specialty: data['specialty'] ?? '',
+    rating: (data['rating'] ?? 0).toDouble(),
+    imagePath: data['photoUrl'] ?? 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png',
+  );
+}).toList();
+
+
+  setState(() {
+    _experts = experts;
+  });
+}
+
+
+Widget _buildExpertCard(Expert expert) {
+  return InkWell(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ExpertProfileScreen(expertId: expert.id ),
+        ),
+      );
+    },
+    child: Card(
       margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 4,
@@ -112,12 +114,25 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(50),
-              child: Image.asset(
-                expert.imagePath,
-                height: 70,
-                width: 70,
-                fit: BoxFit.cover,
-              ),
+              child: Image.network(
+  expert.imagePath,
+  height: 70,
+  width: 70,
+  fit: BoxFit.cover,
+  loadingBuilder: (context, child, loadingProgress) {
+    if (loadingProgress == null) return child;
+    return SizedBox(
+      height: 70,
+      width: 70,
+      child: Center(child: CircularProgressIndicator()),
+    );
+  },
+  errorBuilder: (context, error, stackTrace) {
+    return const Icon(Icons.error, size: 70);
+  },
+),
+
+
             ),
             SizedBox(width: 16),
             Expanded(
@@ -162,8 +177,10 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {

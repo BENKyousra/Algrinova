@@ -3,13 +3,15 @@ import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:algrinova/services/user_service.dart';
+import 'package:algrinova/screens/profile/favorites_screen.dart';
+import 'package:algrinova/screens/profile/settings_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileMyScreen extends StatefulWidget {
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  _ProfileScreenMyState createState() => _ProfileScreenMyState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenMyState extends State<ProfileMyScreen> {
   final userService = UserService();
   late String uid;
   late Future<DocumentSnapshot> _userFuture;
@@ -74,6 +76,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               child: Stack(
                                 children: [
+                                  Positioned(
+                                    top: 40,
+                                    left: 16,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => FavoritesScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: const Icon(Icons.favorite_rounded, color: Colors.white),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 40,
+                                    right: 16,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => SettingsScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: const Icon(Icons.settings, color: Colors.white),
+                                    ),
+                                  ),
                                   const Align(
                                     alignment: Alignment.topCenter,
                                     child: Padding(
@@ -89,16 +121,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                   ),
-                                  Positioned(
-  top: 40,
-  left: 16,
-  child: GestureDetector(
-    onTap: () {
-      Navigator.pop(context);
-    },
-    child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-  ),
-),
                                 ],
                               ),
                             ),
@@ -165,35 +187,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-  mainAxisAlignment: MainAxisAlignment.center,
-  children: [
-    ElevatedButton.icon(
-      onPressed: () {
-        Navigator.pushNamed(
-          context,
-          '/chat',
-          arguments: {
-            'userId': uid, 
-            'userName': name
-          },
-        );
-      },
-      label: const Text(
-        "Contacter",
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-    ),
-  ],
-),
 
                       const SizedBox(height: 5),
                       const Divider(

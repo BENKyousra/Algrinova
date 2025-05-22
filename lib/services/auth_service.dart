@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:algrinova/services/user_service.dart';
 import 'package:flutter/material.dart';
 
 class AuthService extends ChangeNotifier {
@@ -19,6 +20,11 @@ class AuthService extends ChangeNotifier {
       UserCredential userCredential = await _firebaseAuth
           .signInWithEmailAndPassword(email: email, password: password);
 
+     final user = userCredential.user;     
+    if (user != null) {
+      await UserService().updateOnlineStatus(user.uid, true);  // <-- Mise à jour en ligne
+    }
+
       return userCredential;
     }
     // catch error
@@ -28,81 +34,37 @@ class AuthService extends ChangeNotifier {
   }
 
   // sign up regular user
-  Future<UserCredential> signUpWithEmailAndPassword(
-    String email,
-    String password,
-  ) async {
-    try {
-      UserCredential userCredential = await _firebaseAuth
-          .createUserWithEmailAndPassword(email: email, password: password);
-      print("User successfully registered: ${userCredential.user?.email}");
+ Future<UserCredential> signUpWithEmailAndPassword(
+  String email,
+  String password,
+) async {
+  try {
+    // Étape 1 : Créer l'utilisateur avec Firebase Auth
+    UserCredential userCredential = await _firebaseAuth
+        .createUserWithEmailAndPassword(email: email, password: password);
+    
+    print("✅ Compte créé : ${userCredential.user?.email}");
 
-      // after creating the user, add to users collection
-      await _firestore.collection("users").doc(userCredential.user!.uid).set({
-        "email": email,
-        "uid": userCredential.user!.uid,
-        "userType": "regular", // تحديد نوع المستخدم
-        "createdAt": DateTime.now(),
-      });
+    // Étape 2 : Enregistrer l'utilisateur dans Firestore via UserService
+    final user = userCredential.user;
+    if (user != null) {
+      await UserService().saveUser(user);
+    }
 
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      print("Error: ${e.code} - ${e.message}");
-      if (e.code == 'email-already-in-use') {
-        throw Exception("The email is already in use");
-      } else if (e.code == 'weak-password') {
-        throw Exception("Password is too weak");
-      } else if (e.code == 'invalid-email') {
-        throw Exception("The email address is invalid");
-      } else {
-        throw Exception("Error during signup: ${e.message}");
-      }
+    return userCredential;
+  } on FirebaseAuthException catch (e) {
+    print("❌ Erreur Auth : ${e.code} - ${e.message}");
+    if (e.code == 'email-already-in-use') {
+      throw Exception("Cet e-mail est déjà utilisé");
+    } else if (e.code == 'weak-password') {
+      throw Exception("Mot de passe trop faible");
+    } else if (e.code == 'invalid-email') {
+      throw Exception("Adresse e-mail invalide");
+    } else {
+      throw Exception("Erreur pendant l'inscription : ${e.message}");
     }
   }
-
-  // sign up expert user
-  Future<UserCredential> signUpExpertWithEmailAndPassword(
-    String email,
-    String password,
-    Map<String, dynamic> expertData, // بيانات إضافية للخبير
-  ) async {
-    try {
-      UserCredential userCredential = await _firebaseAuth
-          .createUserWithEmailAndPassword(email: email, password: password);
-      print("Expert successfully registered: ${userCredential.user?.email}");
-
-      // after creating the expert, add to experts collection
-      await _firestore.collection("experts").doc(userCredential.user!.uid).set({
-        "email": email,
-        "uid": userCredential.user!.uid,
-        "userType": "expert", // تحديد نوع المستخدم
-        "createdAt": DateTime.now(),
-        ...expertData, // تضمين البيانات الإضافية للخبير
-      });
-
-      // يمكنك أيضًا إضافته إلى مجموعة users العامة إذا كنت تريد ذلك
-      await _firestore.collection("users").doc(userCredential.user!.uid).set({
-        "email": email,
-        "uid": userCredential.user!.uid,
-        "userType": "expert",
-        "createdAt": DateTime.now(),
-      }, SetOptions(merge: true));
-
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      print("Error: ${e.code} - ${e.message}");
-      if (e.code == 'email-already-in-use') {
-        throw Exception("The email is already in use");
-      } else if (e.code == 'weak-password') {
-        throw Exception("Password is too weak");
-      } else if (e.code == 'invalid-email') {
-        throw Exception("The email address is invalid");
-      } else {
-        throw Exception("Error during expert signup: ${e.message}");
-      }
-    }
-  }
-
+}
   // get current user type
   Future<String?> getUserType(String uid) async {
     DocumentSnapshot userDoc =
@@ -122,7 +84,12 @@ class AuthService extends ChangeNotifier {
 
   // sign user out
   Future<void> signOut() async {
+    final user = _firebaseAuth.currentUser;
+  if (user != null) {
+    await UserService().updateOnlineStatus(user.uid, false);  // <-- Mise à jour hors ligne
+  }
     await _firebaseAuth.signOut();
+    
   }
 }
 

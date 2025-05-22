@@ -1,55 +1,51 @@
 import 'package:flutter/material.dart';
-import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:algrinova/services/user_service.dart'; // ici on importe UserService
+import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:algrinova/services/user_service.dart';
 
-class ProfileScreen extends StatefulWidget {
-  @override
-  _ProfileScreenState createState() => _ProfileScreenState();
-}
+class ExpertProfileScreen extends StatelessWidget {
+  final String expertId;
+  
+  final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final userService = UserService();
-  late String uid;
-  late Future<DocumentSnapshot> _userFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/login');
-      });
-    } else {
-      uid = user.uid;
-      _userFuture = userService.getUserProfile(uid);
-    }
-  }
+  ExpertProfileScreen({super.key, required this.expertId});
 
   @override
   Widget build(BuildContext context) {
+    final UserService _userService = UserService();
+
     return Scaffold(
       bottomNavigationBar: CustomBottomNavBar(
         context: context,
-        currentIndex: 4,
+        currentIndex: 1,
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: _userFuture,
+      body: StreamBuilder<DocumentSnapshot>(
+  stream: FirebaseFirestore.instance.collection('users').doc(expertId).snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Erreur lors du chargement du profil.'));
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text("Expert introuvable."));
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
-          final String name = data['name'] ?? 'Inconnu';
-          final String location = data['location'] ?? 'Inconnue';
+
+          // Vérifier que le rôle est bien "expert"
+          if (data['role'] != 'expert') {
+            return const Center(child: Text("Ce profil n'est pas un expert."));
+          }
+
+          final String name = data['name'] ?? 'Nom inconnu';
+          final String specialty = data['specialty'] ?? 'Spécialité inconnue';
+          final String location = data['location'] ?? 'Ville inconnue';
           final String photoUrl = data['photoUrl'] ?? '';
+          
+          final userData = snapshot.data!;
+          final bool isOnline = userData['isOnline'] ?? false;
 
           return LayoutBuilder(
             builder: (context, constraints) {
@@ -148,6 +144,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       Row(
+  mainAxisAlignment: MainAxisAlignment.center,
+  children: [
+    Text(
+      specialty,
+      style: const TextStyle(
+        fontSize: 18,
+        color: Colors.grey,
+      ),
+    ),
+    const SizedBox(width: 8),
+    const Icon(Icons.star, color: Colors.amber, size: 20),
+    Text(
+      (data['rating'] ?? 0).toStringAsFixed(1),
+      style: const TextStyle(
+        fontSize: 16,
+        color: Colors.grey,
+      ),
+    ),
+  ],
+),
+
+                      const SizedBox(height: 4),
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Icon(
@@ -165,44 +184,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 4),         
                       Row(
-  mainAxisAlignment: MainAxisAlignment.center,
-  children: [
-    ElevatedButton.icon(
-      onPressed: () {
-        Navigator.pushNamed(
-          context,
-          '/chat',
-          arguments: {
-            'userId': uid, 
-            'userName': name
-          },
-        );
-      },
-      label: const Text(
-        "Contacter",
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-    ),
-  ],
-),
-
-                      const SizedBox(height: 5),
-                      const Divider(
-                        thickness: 1,
-                        color: Colors.grey,
-                        indent: 40,
-                        endIndent: 40,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/chat',
+                                arguments: {'expertId': expertId, 'expertName': name},
+                              );
+                            },
+                            label: const Text(
+                              "Contacter",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(255, 0, 0, 0),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 5),
+                      const Divider(
+  thickness: 1,
+  color: Colors.grey,
+  indent: 40,
+  endIndent: 40,
+),
+const SizedBox(height: 5),
                       const Text(
                         "Publications récentes",
                         style: TextStyle(
@@ -212,10 +227,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
+
+                      // 🔽 Affichage des posts 🔽
                       FutureBuilder<QuerySnapshot>(
                         future: FirebaseFirestore.instance
                             .collection('posts')
-                            .where('userId', isEqualTo: uid)
+                            .where('userId', isEqualTo: expertId)
                             .orderBy('timestamp', descending: true)
                             .get(),
                         builder: (context, snapshot) {
@@ -253,7 +270,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           child: Image.network(post['imageUrl']),
                                         ),
                                       const SizedBox(height: 8),
-                                      Text(post['text'] ?? ''),
+                                      Text(
+                                        post['text'] ?? '',
+                                       ),
                                     ],
                                   ),
                                 ),
@@ -261,7 +280,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             },
                           );
                         },
-                      ),
+                      ), // ← FIN DU FutureBuilder
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -280,7 +299,12 @@ class BottomWaveClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final path = Path();
     path.lineTo(0, size.height - 40);
-    path.quadraticBezierTo(size.width / 2, size.height, size.width, size.height - 40);
+    path.quadraticBezierTo(
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 40,
+    );
     path.lineTo(size.width, 0);
     path.close();
     return path;
