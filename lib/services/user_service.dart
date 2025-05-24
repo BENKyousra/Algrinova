@@ -96,4 +96,11 @@ class UserService {
     await FirebaseAuth.instance.signOut();
   }
 
+
+  Future<Map<String, dynamic>> getCurrentUserInfo() async {
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+  final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  return doc.data()!;
+}
+
 }

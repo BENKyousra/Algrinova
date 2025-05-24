@@ -225,34 +225,39 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
 
                           final posts = snapshot.data!.docs;
 
-                          return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: posts.length,
-                            itemBuilder: (context, index) {
-                              final post = posts[index].data() as Map<String, dynamic>;
-                              return Card(
-                                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 2,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (post['imageUrl'] != null && post['imageUrl'] != '')
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: Image.network(post['imageUrl']),
-                                        ),
-                                      const SizedBox(height: 8),
-                                      Text(post['text'] ?? ''),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
+return ListView.builder(
+  shrinkWrap: true,
+  physics: const NeverScrollableScrollPhysics(),
+  itemCount: posts.length,
+  itemBuilder: (context, index) {
+    final post = posts[index].data() as Map<String, dynamic>;
+
+    final imageUrl = post['imageUrl'] ?? '';
+    final caption = post['caption'] ?? post['text'] ?? '';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(imageUrl),
+              ),
+            const SizedBox(height: 8),
+            Text(caption),
+          ],
+        ),
+      ),
+    );
+  },
+);
+
                         },
                       ),
                       const SizedBox(height: 20),

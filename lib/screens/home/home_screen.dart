@@ -4,7 +4,12 @@ import 'package:image_picker/image_picker.dart'; // ✅ Ajoute cette ligne
 import 'dart:io'; // ✅ Ajoute cette ligne pour utiliser `File`
 import 'post_details_screen.dart';
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
+import 'package:algrinova/services/post_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:algrinova/services/cloudinary_service.dart';
 
+
+final PostService postService = PostService();
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -12,11 +17,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final PostService postService = PostService();
+
   ScrollController _scrollController = ScrollController();
   bool _isVisible = true;
   TextEditingController _postController = TextEditingController();  // Contrôleur pour le champ de texte
-
-  final ImagePicker _picker = ImagePicker();
   XFile? _pickedImage;
 
   final TextEditingController _searchController = TextEditingController();
@@ -52,16 +57,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+
+
   @override
 Widget build(BuildContext context) {
-final posts = [..._userPosts, ..._getPostData()];
-final filteredList = posts.where((post) {
-  return post['caption'].toLowerCase().contains(_searchQuery) ||
-         post['username'].toLowerCase().contains(_searchQuery) ||
-         post['hashtag'].toLowerCase().contains(_searchQuery);
-
-}).toList();
-
   return GestureDetector(
     onTap: () {
     FocusScope.of(context).unfocus(); // Ferme le clavier et enlève le focus du champ
@@ -82,24 +81,49 @@ final filteredList = posts.where((post) {
             ),
             SizedBox(height: 5),
             Expanded(
-              child: ListView(
-                controller: _scrollController,
-                padding: EdgeInsets.zero,
-                children: filteredList.map((post) {
-                  return _buildPost(
-                    profileImage: post['profileImage'],
-                    username: post['username'],
-                    location: post['location'],
-                    hashtag: post['hashtag'],
-                    caption: post['caption'],
-                    image: post['image'],
-                    likes: post['likes'],
-                    comments: post['comments'],
-                    shares: post['shares'],
-                  );
-                }).toList(),
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+  stream: postService.getAllPosts(),
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+      return Center(child: Text('Aucune publication pour le moment.'));
+    }
+
+    final posts = snapshot.data!;
+
+    return ListView.builder(
+      itemCount: posts.length,
+      itemBuilder: (context, index) {
+        final post = posts[index];
+
+        return _buildPost(
+  photoUrl: post['photoUrl'] ?? 'assets/images/default.jpg',
+  name: post['name'] ?? 'Utilisateur',
+  location: post['location'] ?? 'Algérie',
+  hashtag: post['hashtag'] ?? '',
+  caption: post['caption'] ?? '',
+  image: post['imageUrl'] ?? '', // attention : paramètre attendu = image
+  likes: post['likes'] ?? [], // attention : maintenant une LISTE d’UID
+  currentUserId: FirebaseAuth.instance.currentUser!.uid,
+  postId: post['postId'],
+  postOwnerId: post['userId'],
+  comments: post['comments'] ?? 0,
+  shares: post['shares'] ?? 0,
+  onLike: () async {
+  final user = FirebaseAuth.instance.currentUser!;
+  await postService.toggleLike(post['userId'], post['postId'], user.uid);
+}, 
+);
+
+      },
+    );
+  },
+)
+
               ),
-            ),
           ],
         ),
         AnimatedPositioned(
@@ -140,12 +164,70 @@ final filteredList = posts.where((post) {
 
 TextEditingController _hashtagController = TextEditingController();
 
+
 void _showPostDialog(BuildContext context) {
   showDialog(
     context: context,
     builder: (BuildContext context) {
+      bool isLoading = false;
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, setStateDialog) {
+
+          Future<void> _publishPost() async {
+  if (_postController.text.isEmpty && _pickedImage == null) return;
+
+  setStateDialog(() => isLoading = true);
+
+  try {
+    String? imageUrl;
+
+    // Upload de l'image sur Cloudinary si sélectionnée
+    if (_pickedImage != null) {
+      imageUrl = await uploadImageToCloudinary(File(_pickedImage!.path));
+      if (imageUrl == null) {
+        throw Exception("Échec de l'upload de l'image");
+      }
+    }
+
+    // Appel à ta méthode publishPost (à adapter si besoin)
+    await postService.publishPost(
+      caption: _postController.text,
+      hashtag: _hashtagController.text.isNotEmpty ? _hashtagController.text : '',
+      imageUrl: imageUrl,  // L'URL Cloudinary
+    );
+
+    // Mise à jour locale immédiate (optionnelle)
+    setState(() {
+      _userPosts.insert(0, {
+        'photoUrl': 'assets/images/ton_image.jpg', // adapte selon ton user
+        'name': 'Moi',
+        'location': 'Algérie',
+        'hashtag': _hashtagController.text,
+        'caption': _postController.text,
+        'image': imageUrl ?? '',
+        'likes': [],
+        'comments': 0,
+        'shares': 0,
+      });
+    });
+
+    // Nettoyage des champs
+    _postController.clear();
+    _hashtagController.clear();
+    _pickedImage = null;
+
+    Navigator.of(context).pop(); // Ferme le dialog
+
+  } catch (e) {
+    setStateDialog(() => isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Erreur lors de la publication : $e")),
+    );
+  }
+}
+
+
+
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -155,7 +237,7 @@ void _showPostDialog(BuildContext context) {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ✅ Titre
+                  // Titre et fermeture
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -175,7 +257,7 @@ void _showPostDialog(BuildContext context) {
                   ),
                   SizedBox(height: 10),
 
-                  // ✅ Champ texte
+                  // Champ texte
                   TextField(
                     controller: _postController,
                     maxLines: 4,
@@ -191,6 +273,8 @@ void _showPostDialog(BuildContext context) {
                     ),
                   ),
                   SizedBox(height: 10),
+
+                  // Champ hashtag
                   TextField(
                     controller: _hashtagController,
                     decoration: InputDecoration(
@@ -204,15 +288,16 @@ void _showPostDialog(BuildContext context) {
                       ),
                     ),
                     onChanged: (text) {
-                      // Ajoute un # automatiquement lorsque l'utilisateur tape un mot
                       if (text.isNotEmpty && !text.startsWith('#')) {
                         _hashtagController.text = '#$text';
-                        _hashtagController.selection = TextSelection.collapsed(offset: _hashtagController.text.length);
+                        _hashtagController.selection = TextSelection.collapsed(
+                            offset: _hashtagController.text.length);
                       }
                     },
-                  ), 
+                  ),
                   SizedBox(height: 10),
-                  // ✅ Image sélectionnée (si elle existe)
+
+                  // Image sélectionnée
                   _pickedImage != null
                       ? Column(
                           children: [
@@ -226,18 +311,25 @@ void _showPostDialog(BuildContext context) {
                         )
                       : SizedBox(),
 
-                  // ✅ Bouton pour choisir une image
+                  // Bouton choisir image
                   ElevatedButton.icon(
                     onPressed: () async {
-                      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                      final XFile? image = await ImagePicker()
+                          .pickImage(source: ImageSource.gallery);
                       if (image != null) {
-                        setState(() {
+                        setStateDialog(() {
                           _pickedImage = image;
                         });
                       }
                     },
-                    icon: Icon(Icons.photo_library,color: const Color.fromARGB(255, 255, 255, 255)),
-                    label: Text("Ajouter une image",style: TextStyle(color: const Color.fromARGB(255, 255, 255, 255),fontWeight: FontWeight.bold),
+                    icon: Icon(Icons.photo_library,
+                        color: const Color.fromARGB(255, 255, 255, 255)),
+                    label: Text(
+                      "Ajouter une image",
+                      style: TextStyle(
+                        color: const Color.fromARGB(255, 255, 255, 255),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromRGBO(0, 0, 0, 1),
@@ -249,13 +341,14 @@ void _showPostDialog(BuildContext context) {
                   ),
                   SizedBox(height: 20),
 
-                  // ✅ Boutons en bas
+                  // Boutons bas
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
                         onPressed: () {
                           _postController.clear();
+                          _hashtagController.clear();
                           _pickedImage = null;
                           Navigator.of(context).pop();
                         },
@@ -265,42 +358,33 @@ void _showPostDialog(BuildContext context) {
                         ),
                       ),
                       SizedBox(width: 10),
+
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           backgroundColor: Color.fromARGB(255, 0, 143, 48),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        onPressed: () {
-  if (_postController.text.isNotEmpty || _pickedImage != null) {
-    Navigator.pop(context); // ferme le dialog AVANT le setState
-    setState(() {
-      _userPosts.insert(0, {
-        'profileImage': 'assets/images/ton_image.jpg',
-        'username': 'Moi',
-        'location': 'Algérie',
-        'hashtag': _hashtagController.text.isNotEmpty ? _hashtagController.text : '',
-        'caption': _postController.text,
-        'image': _pickedImage!.path,
-        'likes': 0,
-        'comments': 0,
-        'shares': 0,
-      });
-      _postController.clear();
-      _pickedImage = null;
-    });
-  }
-},
-
-                        child: Text(
-                          "Publier",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        onPressed: isLoading ? null : _publishPost,
+                        child: isLoading
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                "Publier",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -313,7 +397,6 @@ void _showPostDialog(BuildContext context) {
     },
   );
 }
-
 
   Widget _buildCurvedHeader() {
     return Stack(
@@ -423,73 +506,37 @@ void _showPostDialog(BuildContext context) {
   );
 }
 
-  List<Map<String, dynamic>> _getPostData() {
-    return [
-      {
-        'profileImage': "assets/images/pexels-dacapture-13734919.jpg",
-        'username': "Lora Lays",
-        'location': "Algerie, SBA",
-        'hashtag': "#Flower",
-        'caption': "New idea",
-        'image': "assets/images/pexels-pixabay-206876.jpg",
-        'likes': 22,
-        'comments': 22,
-        'shares': 22,
-      },
-      {
-        'profileImage': "assets/images/pexels-mlkbnl-10251392.jpg",
-        'username': "Lora Lays",
-        'location': "Algerie, SBA",
-        'hashtag': "#Nature",
-        'caption': "Amazing view!",
-        'image': "assets/images/pexels-david-bartus-43782-1166209.jpg",
-        'likes': 30,
-        'comments': 18,
-        'shares': 10,
-      },
-      {
-        'profileImage': "assets/images/pexels-mlkbnl-10251392.jpg",
-        'username': "Lora Lays",
-        'location': "Algerie, SBA",
-        'hashtag': "#Nature",
-        'caption': "Amazing view!",
-        'image': "assets/images/pexels-david-bartus-43782-1166209.jpg",
-        'likes': 30,
-        'comments': 18,
-        'shares': 10,
-      },
-    ];
-  }
-
-  }
-
-  Widget _buildPost({
-  required String profileImage,
-  required String username,
+}
+Widget _buildPost({
+  required String photoUrl,
+  required String name,
   required String location,
   required String hashtag,
   required String caption,
   required String image,
-  required int likes,
+  required List likes, // liste des UID
+  required String currentUserId,
+  required String postId,
+  required String postOwnerId,
   required int comments,
   required int shares,
+  required VoidCallback onLike, 
 }) {
   return StatefulBuilder(
     builder: (context, setState) {
-      bool isLiked = false;
-      int likeCount = likes;
+      bool isLiked = likes.contains(currentUserId);
+      int likeCount = likes.length;
       int commentCount = comments;
       int shareCount = shares;
 
       return GestureDetector(
         onTap: () {
-          // Naviguer vers la page de détails du post
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => PostDetailScreen(
-                profileImage: profileImage,
-                username: username,
+                photoUrl: photoUrl,
+                name: name,
                 location: location,
                 hashtag: hashtag,
                 caption: caption,
@@ -497,6 +544,9 @@ void _showPostDialog(BuildContext context) {
                 likes: likeCount,
                 comments: commentCount,
                 shares: shareCount,
+                scrollToComment: true,
+                postId: postId,
+                postOwnerUid: postOwnerId,
               ),
             ),
           );
@@ -508,13 +558,17 @@ void _showPostDialog(BuildContext context) {
             children: [
               Row(
                 children: [
-                  CircleAvatar(backgroundImage: AssetImage(profileImage)),
+                  CircleAvatar(
+                    backgroundImage: photoUrl.startsWith('http')
+                        ? NetworkImage(photoUrl)
+                        : AssetImage(photoUrl) as ImageProvider,
+                  ),
                   SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(username, style: TextStyle(fontWeight: FontWeight.bold,fontSize: 16)),
-                      Text(location, style: TextStyle(color: Color.fromARGB(255, 0, 143, 48),fontWeight: FontWeight.bold,fontSize: 12)),
+                      Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(location, style: TextStyle(color: Color.fromARGB(255, 0, 143, 48), fontWeight: FontWeight.bold, fontSize: 12)),
                     ],
                   ),
                 ],
@@ -526,10 +580,7 @@ void _showPostDialog(BuildContext context) {
                   children: [
                     TextSpan(
                       text: "$hashtag ",
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
                     ),
                     TextSpan(text: caption),
                   ],
@@ -538,41 +589,43 @@ void _showPostDialog(BuildContext context) {
               SizedBox(height: 5),
               ClipRRect(
                 borderRadius: BorderRadius.circular(15),
-                child: image.startsWith('assets/')
-      ? Image.asset(image, fit: BoxFit.cover)
-      : Image.file(File(image), fit: BoxFit.cover),
+                child: image.isNotEmpty
+                    ? Image.network(image, fit: BoxFit.cover)
+                    : SizedBox.shrink(),
               ),
               SizedBox(height: 5),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   InkWell(
-                    onTap: () {
-                      setState(() {
-                        isLiked = !isLiked;
-                        likeCount += isLiked ? 1 : -1;
-                      });
-                    },
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.favorite,
-                          // ignore: dead_code
-                          color: isLiked ? const Color.fromARGB(255, 255, 47, 92) : Color.fromRGBO(80, 80, 80, 1),
-                        ),
-                        SizedBox(width: 5),
-                        Text(likeCount.toString()),
-                      ],
-                    ),
-                  ),
+            onTap: () async {
+              // mets à jour Firestore
+              await postService.toggleLike(postOwnerId, postId, currentUserId);
+
+              // mets à jour localement
+              setState(() {
+                if (isLiked) {
+                  likes.remove(currentUserId);
+                } else {
+                  likes.add(currentUserId);
+                }
+              });
+            },
+            child: Row(
+              children: [
+                Icon(
+                  Icons.favorite,
+                  color: isLiked ? Color.fromARGB(255, 255, 47, 92) : Color.fromRGBO(80, 80, 80, 1),
+                ),
+                SizedBox(width: 5),
+                Text(likes.length.toString()),
+              ],
+            ),
+          ),
+
                   InkWell(
                     onTap: () {
-                      setState(() {
-                        commentCount += 1;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Fonction commentaire à implémenter")),
-                      );
+                      
                     },
                     child: Row(
                       children: [
@@ -609,6 +662,7 @@ void _showPostDialog(BuildContext context) {
     },
   );
 }
+
 
 
 class CurveClipper extends CustomClipper<Path> {

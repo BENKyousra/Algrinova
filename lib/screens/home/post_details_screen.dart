@@ -1,9 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:algrinova/services/post_service.dart';
+import 'package:algrinova/services/user_service.dart';
+
 
 class PostDetailScreen extends StatefulWidget {
-  final String profileImage;
-  final String username;
+  final String photoUrl;
+  final String name;
   final String location;
   final String hashtag;
   final String caption;
@@ -12,10 +17,12 @@ class PostDetailScreen extends StatefulWidget {
   final int comments;
   final int shares;
   final bool scrollToComment;
+  final String postId;
+  final String postOwnerUid;
 
-  PostDetailScreen({
-    required this.profileImage,
-    required this.username,
+  const PostDetailScreen({
+    required this.photoUrl,
+    required this.name,
     required this.location,
     required this.hashtag,
     required this.caption,
@@ -23,6 +30,8 @@ class PostDetailScreen extends StatefulWidget {
     required this.likes,
     required this.comments,
     required this.shares,
+    required this.postId,
+    required this.postOwnerUid,
     this.scrollToComment = false,
   });
 
@@ -33,25 +42,46 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  late List<Map<String, String>> commentList;
+  late List<Map<String, dynamic>> commentList;
+
+  Future<void> _loadComments() async {
+  final snapshot = await FirebaseFirestore.instance
+      .collection('posts')
+      .doc(widget.postOwnerUid)
+      .collection('userPosts')
+      .doc(widget.postId)
+      .collection('comments')
+      .orderBy('timestamp') // si tu as stocké une date
+      .get();
+
+  setState(() {
+    commentList = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'photoUrl': data['photoUrl'] ?? '',
+        'name': data['name'] ?? 'Inconnu',
+        'date': data['timestamp'] != null
+            ? _formatTimestamp(data['timestamp'])
+            : '',
+        'text': data['text'] ?? '',
+      };
+    }).toList();
+  });
+}
+
+String _formatTimestamp(Timestamp timestamp) {
+  final date = timestamp.toDate();
+  return "${date.day.toString().padLeft(2, '0')}/"
+      "${date.month.toString().padLeft(2, '0')}/"
+      "${date.year} ${date.hour.toString().padLeft(2, '0')}:"
+      "${date.minute.toString().padLeft(2, '0')}";
+}
 
   @override
   void initState() {
     super.initState();
     // Exemple de commentaires initiaux
     commentList = [
-      {
-        'profileImage': 'assets/images/pexels-mlkbnl-10251392.jpg',
-        'username': 'Fatima93',
-        'date': '12/04/2025 14:22',
-        'text': 'Magnifique post, bravo 👏',
-      },
-      {
-        'profileImage': 'assets/images/blur.png',
-        'username': 'ZakiDZ',
-        'date': '12/04/2025 15:03',
-        'text': 'Ça pousse bien, super résultat ! 🌱',
-      },
     ];
     if (widget.scrollToComment) {
       // attendre la fin du premier frame puis scroller en bas
@@ -59,41 +89,62 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       });
     }
+    _loadComments();
   }
 
-  void _addComment() {
-    if (_commentController.text.trim().isEmpty) return;
-    final now = DateTime.now();
-    final date =
-        "${now.day.toString().padLeft(2, '0')}/"
-        "${now.month.toString().padLeft(2, '0')}/"
-        "${now.year} ${now.hour.toString().padLeft(2, '0')}:"
-        "${now.minute.toString().padLeft(2, '0')}";
+  void _addComment() async {
+  if (_commentController.text.trim().isEmpty) return;
 
-    setState(() {
-      commentList.add({
-        'profileImage': widget.profileImage,
-        'username': widget.username,
-        'date': date,
-        'text': _commentController.text.trim(),
-      });
-      _commentController.clear();
-      // scroller en bas
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 100,
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+  final now = DateTime.now();
+  final date = "${now.day.toString().padLeft(2, '0')}/"
+      "${now.month.toString().padLeft(2, '0')}/"
+      "${now.year} ${now.hour.toString().padLeft(2, '0')}:" 
+      "${now.minute.toString().padLeft(2, '0')}";
+
+  final text = _commentController.text.trim();
+
+  // 🔹 Récupérer l’utilisateur connecté
+  final currentUserInfo = await UserService().getCurrentUserInfo();
+  final name = currentUserInfo['name'];
+  final photoUrl = currentUserInfo['photoUrl'];
+  final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonyme';
+
+  // 🔹 Affichage visuel
+  setState(() {
+    commentList.add({
+      'photoUrl': photoUrl,
+      'name': name,
+      'date': date,
+      'text': text,
     });
-  }
+    _commentController.clear();
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent + 100,
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  });
 
-  ImageProvider _imageProvider(String path) {
-    if (path.startsWith('assets/')) {
-      return AssetImage(path);
-    } else {
-      return FileImage(File(path));
-    }
+  // 🔥 Enregistrement dans Firestore
+  await PostService().addComment(
+    ownerId: widget.postOwnerUid,
+    postId: widget.postId,
+    userId: userId,
+    name: name,
+    photoUrl: photoUrl,
+    text: text,
+  );
+}
+
+ 
+  ImageProvider _imageProvider(String photoUrl) {
+  if (photoUrl.isNotEmpty) {
+    return NetworkImage(photoUrl);
+  } else {
+    return AssetImage('assets/default_profile.png');
   }
+}
+
 
 
   @override
@@ -136,14 +187,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundImage: _imageProvider(widget.profileImage),
+                        backgroundImage: _imageProvider(widget.photoUrl),
                       ),
                       SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.username,
+                            widget.name,
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           Text(
@@ -241,7 +292,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           CircleAvatar(
                             radius: 20,
                             backgroundImage: _imageProvider(
-                              comment['profileImage']!,
+                              comment['photoUrl']!,
                             ),
                           ),
                           SizedBox(width: 10),
@@ -252,7 +303,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 Row(
                                   children: [
                                     Text(
-                                      comment['username']!,
+                                      comment['name']!,
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,

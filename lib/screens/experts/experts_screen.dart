@@ -279,6 +279,8 @@ Widget _buildExpertCard(Expert expert) {
       );
   }
 
+
+
   Widget _buildCurvedHeader() {
     return Stack(
       children: [

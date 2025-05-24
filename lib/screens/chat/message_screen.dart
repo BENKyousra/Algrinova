@@ -1,49 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:algrinova/services/chat_service.dart'; 
+import 'package:algrinova/services/user_service.dart';
+import 'package:algrinova/screens/chat/chat_screen.dart';
 
-class test1 extends StatefulWidget {
+
+class MessageScreen extends StatefulWidget {
   final String receiverUserId;
   final String receiverUserEmail;
-  final String receiverUserProfileImage;
-  final String receiverUserUsername;
+  final String receiverUserphotoUrl;
+  final String receivername;
 
-  const test1({
+  const MessageScreen({
     super.key,
     required this.receiverUserId,
     required this.receiverUserEmail,
-    required this.receiverUserProfileImage,
-    required this.receiverUserUsername,
+    required this.receiverUserphotoUrl,
+    required this.receivername,
   });
 
   @override
-  State<test1> createState() => _test1State();
+  State<MessageScreen> createState() => _ChatPageState();
 }
 
-class _test1State extends State<test1> {
+class _ChatPageState extends State<MessageScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final ChatService _chatService = ChatService();
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ScrollController _scrollController = ScrollController();
   final FocusNode _messageFocusNode = FocusNode();
-  String? _selectedMessageId;
+    String? _selectedMessageId; // سيخزن معرف الرسالة المحددة فقط
 
-  // قائمة لتخزين الرسائل
-  List<Map<String, dynamic>> _messages = [];
 
   @override
   void initState() {
     super.initState();
-    // إضافة بعض الرسائل الوهمية عند بدء التشغيل
-    _messages = [
-      {
-        'message': 'Hello there!',
-        'senderId': widget.receiverUserId,
-        'timestamp': DateTime.now().subtract(Duration(minutes: 5)),
-        'senderProfileImage': widget.receiverUserProfileImage,
-      },
-      {
-        'message': 'Hi! How are you?',
-        'senderId': 'current-user-id',
-        'timestamp': DateTime.now().subtract(Duration(minutes: 3)),
-      },
-    ];
+    _markMessagesAsRead();
   }
 
   @override
@@ -54,25 +48,77 @@ class _test1State extends State<test1> {
     super.dispose();
   }
 
-  void sendMessage() {
+  Future<void> sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
-    // إنشاء رسالة جديدة
-    final newMessage = {
-      'message': _messageController.text.trim(),
-      'senderId': 'current-user-id', // معرّف المستخدم الحالي
-      'timestamp': DateTime.now(),
-    };
-
-    setState(() {
-      _messages.add(newMessage); // إضافة الرسالة إلى القائمة
-    });
-
-    _messageController.clear();
-
-    // هنا يمكنك إضافة كود لإرسال الرسالة إلى الخادم/الخلفية
+    try {
+      await _chatService.sendMessage(
+        widget.receiverUserId,
+        _messageController.text.trim(),
+      );
+      _messageController.clear();
+      _scrollToBottom();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message: ${e.toString()}')),
+      );
+    }
   }
 
+  Future<void> _markMessagesAsRead() async {
+    final currentUserId = _firebaseAuth.currentUser?.uid;
+
+    if (currentUserId == null) return;
+
+    try {
+      final chatRoomId = _generateChatRoomId(
+        widget.receiverUserId,
+        currentUserId,
+      );
+      final chatRoomSnapshot =
+          await _firestore.collection('chatRooms').doc(chatRoomId).get();
+
+      if (chatRoomSnapshot.exists) {
+        final chatRoomData = chatRoomSnapshot.data() as Map<String, dynamic>;
+        final unreadBy = List<String>.from(chatRoomData['unreadBy'] ?? []);
+
+        if (unreadBy.contains(currentUserId)) {
+          unreadBy.remove(currentUserId);
+
+          // تحديث قاعدة البيانات لإزالة المستخدم من قائمة "غير مقروء"
+          await _firestore.collection('chatRooms').doc(chatRoomId).update({
+            'unreadBy': unreadBy,
+          });
+        }
+      }
+    } catch (e) {
+      print('Error marking messages as read: $e');
+    }
+  }
+
+  String _generateChatRoomId(String userId1, String userId2) {
+    final ids = [userId1, userId2]..sort();
+    return ids.join('_');
+  }
+
+  void _scrollToBottom({bool animate = true}) {
+    if (!_scrollController.hasClients) return;
+
+    if (animate) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
   void _showSettingsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -124,17 +170,23 @@ class _test1State extends State<test1> {
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.grey.shade400,
-              radius: 22,
-              backgroundImage: AssetImage(widget.receiverUserProfileImage),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                
+              ),
+              child: CircleAvatar(
+                backgroundColor: Colors.grey.shade400,
+                radius: 22,
+                backgroundImage: AssetImage(widget.receiverUserphotoUrl),
+              ),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.receiverUserUsername,
+                  widget.receivername,
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 18,
@@ -175,79 +227,103 @@ class _test1State extends State<test1> {
   }
 
   Widget _buildMessageList() {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final data = _messages[index];
-        final isMe = data['senderId'] != widget.receiverUserId;
-        final isSelected = _selectedMessageId == index.toString();
+    final currentUserId = _firebaseAuth.currentUser?.uid;
+    final chatRoomId = _generateChatRoomId(widget.receiverUserId, currentUserId ?? '');
 
-        return GestureDetector(
-          onLongPress: () {
-            setState(() {
-              _selectedMessageId = isSelected ? null : index.toString();
-            });
-          },
-          child: TweenAnimationBuilder(
-            tween: Tween<Offset>(
-              begin: Offset(isMe ? 1 : -1, 0),
-              end: Offset(0, 0),
-            ),
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-            builder: (context, Offset offset, child) {
-              return Transform.translate(offset: offset * 20, child: child);
-            },
-            child: Container(
-              margin: EdgeInsets.only(
-                bottom: 4,
-                left: isMe ? 64 : 1,
-                right: isMe ? 1 : 64,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('chatRooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .orderBy('timestamp', descending: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No messages yet.'));
+        }
 
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          isMe
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                      children: [
-                        Material(
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(isMe ? 12 : 12),
-                            topRight: Radius.circular(isMe ? 12 : 12),
-                            bottomLeft: const Radius.circular(15),
-                            bottomRight: const Radius.circular(15),
-                          ),
-                          elevation: 0,
-                          color: isMe ? Color.fromARGB(255, 0, 143, 48) : Color.fromARGB(255, 0, 0, 0),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 10,
-                            ),
-                            child: Text(
-                              data['message'],
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: isMe ? Colors.white : Colors.white,
-                                fontWeight: FontWeight.bold,
+        final messages = snapshot.data!.docs;
+
+        // Scroll to bottom when new messages arrive
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom(animate: false));
+
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(16),
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final data = messages[index].data() as Map<String, dynamic>;
+            final isMe = data['senderId'] == currentUserId;
+            final isSelected = _selectedMessageId == messages[index].id;
+
+            return GestureDetector(
+              onLongPress: () {
+                setState(() {
+                  _selectedMessageId = isSelected ? null : messages[index].id;
+                });
+              },
+              child: TweenAnimationBuilder(
+                tween: Tween<Offset>(
+                  begin: Offset(isMe ? 1 : -1, 0),
+                  end: Offset(0, 0),
+                ),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                builder: (context, Offset offset, child) {
+                  return Transform.translate(offset: offset * 20, child: child);
+                },
+                child: Container(
+                  margin: EdgeInsets.only(
+                    bottom: 4,
+                    left: isMe ? 64 : 1,
+                    right: isMe ? 1 : 64,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              isMe
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                          children: [
+                            Material(
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(isMe ? 12 : 12),
+                                topRight: Radius.circular(isMe ? 12 : 12),
+                                bottomLeft: const Radius.circular(15),
+                                bottomRight: const Radius.circular(15),
+                              ),
+                              elevation: 0,
+                              color: isMe ? Color.fromARGB(255, 0, 143, 48) : Color.fromARGB(255, 0, 0, 0),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 10,
+                                ),
+                                child: Text(
+                                  data['message'],
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: isMe ? Colors.white : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

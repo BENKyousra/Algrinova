@@ -1,8 +1,10 @@
+import 'package:algrinova/screens/chat/message_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algrinova/services/user_service.dart'; // ici on importe UserService
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 
 class ExpertProfileScreen extends StatelessWidget {
   final String expertId;
@@ -21,7 +23,7 @@ class ExpertProfileScreen extends StatelessWidget {
         currentIndex: 1,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-  stream: FirebaseFirestore.instance.collection('users').doc(expertId).snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(expertId).snapshots(),
 
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -86,34 +88,34 @@ class ExpertProfileScreen extends StatelessWidget {
                                     ),
                                   ),
                                   Positioned(
-  top: 40,
-  left: 16,
-  child: GestureDetector(
-    onTap: () {
-      Navigator.pop(context);
-    },
-    child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-  ),
-),
+                                          top: 40,
+                                          left: 16,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                            },
+                                            child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                                          ),
+                                        ),
                                 ],
                               ),
                             ),
                           ),
-                          Positioned(
-  top: 90,
-  child: Stack(
-    children: [
-      CircleAvatar(
-        radius: 55,
-        backgroundColor: Colors.white,
-        child: CircleAvatar(
-          radius: 50,
-          backgroundImage: photoUrl != ""
-              ? NetworkImage(photoUrl)
-              : const AssetImage("assets/images/pexels-olly-3756616.jpg")
-                  as ImageProvider,
-        ),
-      ),
+                    Positioned(
+        top: 90,
+        child: Stack(
+          children: [
+            CircleAvatar(
+              radius: 55,
+              backgroundColor: Colors.white,
+              child: CircleAvatar(
+                radius: 50,
+                backgroundImage: photoUrl != ""
+                    ? NetworkImage(photoUrl)
+                    : const AssetImage("assets/images/pexels-olly-3756616.jpg")
+                        as ImageProvider,
+              ),
+            ),
       Positioned(
         bottom: 6,
         right: 6,
@@ -190,10 +192,16 @@ class ExpertProfileScreen extends StatelessWidget {
                         children: [
                           ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.pushNamed(
+                              Navigator.push(
                                 context,
-                                '/chat',
-                                arguments: {'expertId': expertId, 'expertName': name},
+                                MaterialPageRoute(
+                                  builder: (context) => MessageScreen(
+                                    receiverUserId: expertId,
+                                    receiverUserEmail: data['email'] ?? '',
+                                    receiverUserphotoUrl: photoUrl,
+                                    receivername: name,
+                                  ),
+                                ),
                               );
                             },
                             label: const Text(
@@ -280,7 +288,7 @@ const SizedBox(height: 5),
                             },
                           );
                         },
-                      ), // ← FIN DU FutureBuilder
+                      ),
                       const SizedBox(height: 20),
                     ],
                   ),

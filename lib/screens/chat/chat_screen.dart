@@ -2,27 +2,108 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/screens/chat/message_screen.dart';
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? expertId;
   final String? expertEmail;
+  bool _isVisible = true;
 
-  const ChatScreen({super.key, this.expertId, this.expertEmail});
+  ChatScreen({super.key, this.expertId, this.expertEmail});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  State<ChatScreen> createState() => ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  bool _isVisible = true;
-  String _searchQuery = ''; 
+class ChatPartner {
+  final String id;
+  final String name;
+  final String email;
+  final String photoUrl;
+  final String specialty;
+
+  ChatPartner({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.photoUrl,
+    required this.specialty,
+  });
+
+  factory ChatPartner.fromExpert(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return ChatPartner(
+      id: doc.id,
+      name: data['name'] ?? 'خبير',
+      email: data['email'] ?? '',
+      photoUrl: data['photoUrl'] ?? '',
+      specialty: data['specialization'] ?? 'خبير',
+    );
+  }
+
+  factory ChatPartner.fromUser(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return ChatPartner(
+      id: doc.id,
+      name: data['name'] ?? 'مستخدم',
+      email: data['email'] ?? '',
+      photoUrl: data['photoUrl'] ?? '',
+      specialty: '',
+    );
+  }
+}
+
+class LifecycleEventHandler extends WidgetsBindingObserver {
+  final Function resumeCallBack;
+  final Function suspendingCallBack;
+
+  LifecycleEventHandler({
+    required this.resumeCallBack,
+    required this.suspendingCallBack,
+  });
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        resumeCallBack();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        suspendingCallBack();
+        break;
+    }
+  }
+}
+
+class ChatScreenState extends State<ChatScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  final ScrollController _scrollController = ScrollController();
+  bool _isVisible = true;
+
+  int getUnreadMessagesCount(
+    AsyncSnapshot<QuerySnapshot> snapshot,
+    String expertId,
+    String currentUserId,
+  ) {
+    return snapshot.data!.docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return data['senderId'] == expertId &&
+          data['unreadBy'] != null &&
+          (data['unreadBy'] as List).contains(currentUserId);
+    }).length;
+  }
+
+   @override
   void initState() {
     super.initState();
+    _updateUserStatus(true);
     _scrollController.addListener(() {
       if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
         if (_isVisible) {
@@ -38,14 +119,38 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
+    
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _updateUserStatus(false);
     super.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Disposed successfully')));
+    });
   }
 
+  // دالة محدثة مع معالجة الأخطاء
+  Future<void> _updateUserStatus(bool isOnline) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+              'isOnline': isOnline,
+              'lastSeen':
+                  FieldValue.serverTimestamp(), // أفضل من DateTime.now()
+            });
+      }
+    } catch (e) {
+      debugPrint('Error updating user status: $e');
+    }
+  }
  @override
 Widget build(BuildContext context) {
   return Scaffold(
@@ -197,119 +302,149 @@ Widget build(BuildContext context) {
     );
   }
   Widget _buildChatList() {
-    // مثال على بيانات وهمية للدردشات
-    final dummyChats =
-        [
-          {
-            'name': 'John Doe',
-            'lastMessage': 'Hello there!',
-            'time': '2h',
-            'unreadCount': 3,
-            'imageUrl': 'assets/images/user1.png',
-          },
-          {
-            'name': 'Jane Smith',
-            'lastMessage': 'How are you doing?',
-            'time': '1d',
-            'unreadCount': 1,
-            'imageUrl': 'assets/images/user1.png',
-          },
-          {
-            'name': 'Mark Johnson',
-            'lastMessage': 'How are you?',
-            'time': '5m',
-            'unreadCount': 0,
-            'imageUrl': 'assets/images/user1.png',
-          },
-        ].where((chat) {
-          final name = chat['name'] as String;
-          return name.toLowerCase().startsWith(_searchQuery.toLowerCase());
-        }).toList();
+  final currentUser = FirebaseAuth.instance.currentUser;
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 0),
-      itemCount: dummyChats.length,
-      itemBuilder: (context, index) {
-        final chat = dummyChats[index];
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Colors.grey.shade400,
-            radius: 28,
-            backgroundImage: AssetImage(
-              chat['imageUrl'] as String? ?? 'assets/images/user1.png',
-            ),
-          ),
-          title: Text(
-            chat['name']! as String,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontFamily: 'QuickSand',
-            ),
-          ),
-          subtitle: Text(
-            chat['lastMessage']! as String,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color:
-                  (chat['unreadCount'] as int) > 0 ? const Color.fromARGB(255, 0, 143, 48) : Colors.grey,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                chat['time']! as String,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              if ((chat['unreadCount'] as int) > 0)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color.fromARGB(255, 0, 0, 0),
-                    shape: BoxShape.circle,
-                    border: Border.fromBorderSide(
-                      BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 4),
+  if (currentUser == null) {
+    return Center(child: Text("Utilisateur non connecté"));
+  }
+
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('messages')
+        .where('participants', arrayContains: currentUser.uid)
+        .orderBy('lastMessageTime', descending: true)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return Center(child: Text("Aucune discussion pour le moment"));
+      }
+
+      final chats = snapshot.data!.docs;
+
+      return ListView.separated( // <-- Utiliser ListView.separated si tu veux un séparateur
+        itemCount: chats.length,
+        separatorBuilder: (context, index) => Divider(
+          height: 0, thickness: 0.5, color: Colors.grey.withOpacity(0.5),
+        ),
+        itemBuilder: (context, index) {
+          final chatDoc = chats[index];
+          final data = chatDoc.data() as Map<String, dynamic>;
+
+          final participants = List<String>.from(data['participants']);
+          final partnerId = participants.firstWhere((id) => id != currentUser.uid);
+
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(partnerId).get(),
+            builder: (context, userSnapshot) {
+              if (!userSnapshot.hasData) {
+                return SizedBox();
+              }
+
+              final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+              final name = userData['name'] ?? 'Utilisateur';
+              final photoUrl = userData['photoUrl'] ?? 'assets/images/user1.png';
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: photoUrl.startsWith('http')
+                      ? NetworkImage(photoUrl)
+                      : AssetImage('assets/images/user1.png') as ImageProvider,
+                  radius: 28,
+                ),
+                title: Text(
+                  name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'QuickSand',
+                  ),
+                ),
+                subtitle: Text(
+                  data['lastMessage']! as String,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: (data['unreadCount'] as int) > 0
+                        ? const Color.fromARGB(255, 0, 143, 48)
+                        : Colors.grey,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatTimestamp(data['lastMessageTime']),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    if ((data['unreadCount'] as int) > 0)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color.fromARGB(255, 0, 0, 0),
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 4),
+                          ),
+                        ),
+                        child: Text(
+                          '${data['unreadCount']}',
+                          style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ],
+                ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MessageScreen(
+                      receiverUserId: partnerId,
+                      receiverUserEmail: userData['email'] ?? '',
+                      receiverUserphotoUrl: photoUrl,
+                      receivername: name,
                     ),
                   ),
-                  child: Text(
-                    '${chat['unreadCount']}',
-                    style: const TextStyle(fontSize: 10, color: Colors.white , fontWeight: FontWeight.bold),
-                  ),
                 ),
-            ],
-          ),
-          onTap:
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (context) => test1(
-                        receiverUserId: 'dummy_id',
-                        receiverUserEmail: 'dummy@email.com',
-                        receiverUserProfileImage:
-                            (chat['imageUrl'] as String?) ??
-                            'assets/images/user1.png',
-                        receiverUserUsername: chat['name']! as String,
-                      ),
-                ),
-              ),
-        );
-      },
-      separatorBuilder: (context, index) => Divider(
-        height: 0, thickness: 0.5, color: Colors.grey.withOpacity(0.5),
-        ),
-    );
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
+String _formatTimestamp(Timestamp? timestamp) {
+  if (timestamp == null) return '';
+  final dateTime = timestamp.toDate();
+  final now = DateTime.now();
+  final difference = now.difference(dateTime);
+
+  if (difference.inDays >= 1) {
+    return "${difference.inDays}j";
+  } else if (difference.inHours >= 1) {
+    return "${difference.inHours}h";
+  } else if (difference.inMinutes >= 1) {
+    return "${difference.inMinutes}m";
+  } else {
+    return "maintenant";
   }
+}
+
 
   Widget _buildOnlineUsersList() {
     // مثال على بيانات وهمية للمستخدمين المتصلين
     final dummyOnlineUsers = [
       {'name': 'Alex', 'imageaUrl': 'assets/images/user1.png'},
-      {'name': 'Sarah', 'imageUrl': 'assets/images/user1.png'},
-      {'name': 'Mike', 'imageUrl': 'assets/images/user1.png'},
+      {'name': 'Sarah', 'photoUrl': 'assets/images/user1.png'},
+      {'name': 'Mike', 'photoUrl': 'assets/images/user1.png'},
     ];
 
     return SizedBox(
@@ -327,13 +462,13 @@ Widget build(BuildContext context) {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) => test1(
-                            receiverUserId: 'dummy_id',
-                            receiverUserEmail: 'dummy@email.com',
-                            receiverUserProfileImage:
-                                user['imageUrl'] ?? 'assets/images/user1.png',
-                            receiverUserUsername: user['name']!,
-                          ),
+                          (context) => MessageScreen(
+                                receiverUserId: 'dummy_id',
+                                receiverUserEmail: 'dummy@email.com',
+                                receiverUserphotoUrl:
+                                    user['photoUrl'] ?? 'assets/images/user1.png',
+                                receivername: user['name']!,
+                              ),
                     ),
                   ),
               child: Column(
@@ -346,7 +481,7 @@ Widget build(BuildContext context) {
                         backgroundColor: Colors.grey.shade400,
                         radius: 30,
                         backgroundImage: AssetImage(
-                          user['imageUrl'] ?? 'assets/images/user1.png',
+                          user['photoUrl'] ?? 'assets/images/user1.png',
                         ),
                       ),
                       Container(
