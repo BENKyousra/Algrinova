@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:algrinova/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,7 +7,6 @@ import 'package:algrinova/services/user_service.dart';
 
 
 class PostDetailScreen extends StatefulWidget {
-  final String photoUrl;
   final String name;
   final String location;
   final String hashtag;
@@ -21,7 +20,6 @@ class PostDetailScreen extends StatefulWidget {
   final String postOwnerUid;
 
   const PostDetailScreen({
-    required this.photoUrl,
     required this.name,
     required this.location,
     required this.hashtag,
@@ -40,6 +38,12 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
+  String? caption;
+String? hashtag;
+bool isLoadingPostData = true;
+ String? _currentPhotoUrl;
+
+
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late List<Map<String, dynamic>> commentList;
@@ -51,21 +55,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       .collection('userPosts')
       .doc(widget.postId)
       .collection('comments')
-      .orderBy('timestamp') // si tu as stocké une date
+      .orderBy('timestamp', descending: true)
       .get();
 
+  List<Map<String, dynamic>> loadedComments = [];
+  for (var doc in snapshot.docs) {
+    final data = doc.data();
+    String userId = data['userId'] ?? '';
+    String photoUrl = '';
+    if (userId.isNotEmpty) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      photoUrl = userDoc.data()?['photoUrl'] ?? '';
+    }
+    loadedComments.add({
+      'photoUrl': photoUrl,
+      'name': data['name'] ?? 'Inconnu',
+      'date': data['timestamp'] != null
+          ? _formatTimestamp(data['timestamp'])
+          : '',
+      'text': data['text'] ?? '',
+    });
+  }
   setState(() {
-    commentList = snapshot.docs.map((doc) {
-      final data = doc.data();
-      return {
-        'photoUrl': data['photoUrl'] ?? '',
-        'name': data['name'] ?? 'Inconnu',
-        'date': data['timestamp'] != null
-            ? _formatTimestamp(data['timestamp'])
-            : '',
-        'text': data['text'] ?? '',
-      };
-    }).toList();
+    commentList = loadedComments;
   });
 }
 
@@ -76,21 +88,56 @@ String _formatTimestamp(Timestamp timestamp) {
       "${date.year} ${date.hour.toString().padLeft(2, '0')}:"
       "${date.minute.toString().padLeft(2, '0')}";
 }
+@override
+void initState() {
+  super.initState();
+   _fetchUserPhotoUrl().then((_) {
+    setState(() {
+      isLoadingPostData = false;
+    });
+  });
+  commentList = [];
 
-  @override
-  void initState() {
-    super.initState();
-    // Exemple de commentaires initiaux
-    commentList = [
-    ];
-    if (widget.scrollToComment) {
-      // attendre la fin du premier frame puis scroller en bas
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      });
-    }
-    _loadComments();
+  _loadPostData(); // Nouvelle fonction
+  _loadComments();
+  
+
+  if (widget.scrollToComment) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
   }
+}
+
+void _loadPostData() async {
+  final doc = await FirebaseFirestore.instance
+      .collection('posts')
+      .doc(widget.postOwnerUid)
+      .collection('userPosts')
+      .doc(widget.postId)
+      .get();
+
+  if (doc.exists) {
+    setState(() {
+      caption = doc['caption'];
+      hashtag = doc['hashtag'];
+      isLoadingPostData = false;
+    });
+  }
+}
+
+Future<void> _fetchUserPhotoUrl() async {
+  final doc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(widget.postOwnerUid)
+      .get();
+
+  if (doc.exists) {
+    setState(() {
+      _currentPhotoUrl = doc['photoUrl'];
+    });
+  }
+}
 
   void _addComment() async {
   if (_commentController.text.trim().isEmpty) return;
@@ -131,8 +178,8 @@ String _formatTimestamp(Timestamp timestamp) {
     postId: widget.postId,
     userId: userId,
     name: name,
-    photoUrl: photoUrl,
     text: text,
+    photoUrl: photoUrl,
   );
 }
 
@@ -145,35 +192,161 @@ String _formatTimestamp(Timestamp timestamp) {
   }
 }
 
+void _confirmDeletePost() async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Supprimer le post'),
+      content: Text('Es-tu sûr de vouloir supprimer ce post ?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Annuler'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text('Supprimer', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm == true) {
+    await FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.postOwnerUid)
+        .collection('userPosts')
+        .doc(widget.postId)
+        .delete();
+    await FirebaseFirestore.instance
+        .collection('allPosts')
+        .doc(widget.postId)
+        .delete();
+
+    Navigator.pop(context); // Retour à l'écran précédent
+  }
+}
+
+void _showEditDialog() {
+  TextEditingController captionController =
+      TextEditingController(text: caption);
+  TextEditingController hashtagController =
+      TextEditingController(text: hashtag);
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Modifier le post'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: captionController,
+            decoration: InputDecoration(labelText: 'Caption'),
+          ),
+          TextField(
+            controller: hashtagController,
+            decoration: InputDecoration(labelText: 'Hashtag'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Annuler'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black // Couleur verte
+          ),
+          onPressed: () async {
+            final newCaption = captionController.text.trim();
+            final newHashtag = hashtagController.text.trim();
+
+            await FirebaseFirestore.instance
+                .collection('posts')
+                .doc(widget.postOwnerUid)
+                .collection('userPosts')
+                .doc(widget.postId)
+                .update({
+              'caption': newCaption,
+              'hashtag': newHashtag,
+            });
+
+            setState(() {
+              caption = newCaption;
+              hashtag = newHashtag;
+            });
+
+            Navigator.of(context).pop();
+          },
+          child: Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.bold,color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
 
 
   @override
   Widget build(BuildContext context) {
+    if (isLoadingPostData) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Chargement...')),
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(kToolbarHeight),
-        child: ClipRRect(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-          child: AppBar(
-            title: Text(
-              'Post',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            flexibleSpace: Image.asset(
-              'assets/images/blur.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            iconTheme: IconThemeData(color: Colors.white),
-          ),
+  preferredSize: Size.fromHeight(kToolbarHeight),
+  child: ClipRRect(
+    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+    child: AppBar(
+      title: Text(
+        'Post',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 25,
+          fontWeight: FontWeight.bold,
         ),
       ),
+      actions: [
+  if (FirebaseAuth.instance.currentUser?.uid == widget.postOwnerUid)
+    PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showEditDialog();
+        } else if (value == 'delete') {
+          _confirmDeletePost();
+        }
+      },
+      itemBuilder: (BuildContext context) {
+        return [
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Text('Modifier'),
+          ),
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: Text('Supprimer'),
+          ),
+        ];
+      },
+    ),
+],
+
+      flexibleSpace: Image.asset(
+        'assets/images/blur.png',
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+      ),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      iconTheme: IconThemeData(color: Colors.white),
+    ),
+  ),
+),
+
       body: Column(
         children: [
           Expanded(
@@ -187,7 +360,9 @@ String _formatTimestamp(Timestamp timestamp) {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundImage: _imageProvider(widget.photoUrl),
+                        backgroundImage:  _currentPhotoUrl != null
+      ? NetworkImage(_currentPhotoUrl!)
+      : AssetImage('assets/images/default.png') as ImageProvider,
                       ),
                       SizedBox(width: 10),
                       Column(
@@ -236,8 +411,16 @@ String _formatTimestamp(Timestamp timestamp) {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      InkWell(
-                        onTap: () {},
+InkWell(
+  onTap: () async {
+    final ownerId = widget.postOwnerUid;
+    final postId = widget.postId;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return; // Prevent calling with null userId
+    await PostService().toggleLike(ownerId, postId, userId);
+    setState(() {}); // force la reconstruction si nécessaire
+  },
+
                         child: Row(
                           children: [
                             Icon(Icons.favorite, color: Color.fromRGBO(80, 80, 80, 1)),

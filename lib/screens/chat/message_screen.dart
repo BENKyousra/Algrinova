@@ -1,10 +1,9 @@
+import 'package:algrinova/screens/experts/experts_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:algrinova/services/chat_service.dart'; 
-import 'package:algrinova/services/user_service.dart';
+import 'package:algrinova/services/chat_service.dart';
 import 'package:algrinova/screens/chat/chat_screen.dart';
-
 
 class MessageScreen extends StatefulWidget {
   final String receiverUserId;
@@ -31,8 +30,7 @@ class _ChatPageState extends State<MessageScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ScrollController _scrollController = ScrollController();
   final FocusNode _messageFocusNode = FocusNode();
-    String? _selectedMessageId; // سيخزن معرف الرسالة المحددة فقط
-
+  String? _selectedMessageId; // سيخزن معرف الرسالة المحددة فقط
 
   @override
   void initState() {
@@ -119,6 +117,7 @@ class _ChatPageState extends State<MessageScreen> {
     final date = timestamp.toDate();
     return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
+
   void _showSettingsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -158,27 +157,44 @@ class _ChatPageState extends State<MessageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return 
-    Scaffold(
+    return Scaffold(
       appBar: AppBar(
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.3),
+        backgroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => ChatScreen(
+                      expertId: widget.receiverUserId,
+                      expertEmail: widget.receiverUserEmail,
+                    ),
+              ),
+            );
+          },
         ),
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                
-              ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ExpertProfileScreen(
+                          expertId: widget.receiverUserId,
+                        ),
+                  ),
+                );
+              },
               child: CircleAvatar(
-                backgroundColor: Colors.grey.shade400,
                 radius: 22,
-                backgroundImage: AssetImage(widget.receiverUserphotoUrl),
+                backgroundImage: NetworkImage(widget.receiverUserphotoUrl),
               ),
             ),
             const SizedBox(width: 12),
@@ -194,9 +210,36 @@ class _ChatPageState extends State<MessageScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Online',
-                  style: TextStyle(fontSize: 12,fontWeight: FontWeight.bold , color: Color.fromARGB(255, 0, 143, 48)),
+                StreamBuilder<DocumentSnapshot>(
+                  stream:
+                      FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(widget.receiverUserId)
+                          .snapshots(),
+                  builder: (context, snapshot) {
+                    bool isOnline = false;
+                    if (snapshot.data != null) {
+                      final data = snapshot.data;
+                      if (data == null) {
+                        return Text(
+                          'Offline',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        );
+                      }
+                      final userData = data.data() as Map<String, dynamic>?;
+                      if (userData != null &&
+                          userData.containsKey('isOnline')) {
+                        isOnline = userData['isOnline'] ?? false;
+                      }
+                    }
+                    return Text(
+                      isOnline ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isOnline ? Colors.green : Colors.grey,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -211,6 +254,7 @@ class _ChatPageState extends State<MessageScreen> {
       ),
       body: GestureDetector(
         onTap: () {
+          // إخفاء وقت الإرسال عند الضغط في أي مكان بالشاشة
           setState(() {
             _selectedMessageId = null;
           });
@@ -221,22 +265,25 @@ class _ChatPageState extends State<MessageScreen> {
             _buildMessageInput(),
           ],
         ),
-      
       ),
     );
   }
 
   Widget _buildMessageList() {
     final currentUserId = _firebaseAuth.currentUser?.uid;
-    final chatRoomId = _generateChatRoomId(widget.receiverUserId, currentUserId ?? '');
+    final chatRoomId = _generateChatRoomId(
+      widget.receiverUserId,
+      currentUserId ?? '',
+    );
 
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('chatRooms')
-          .doc(chatRoomId)
-          .collection('messages')
-          .orderBy('timestamp', descending: false)
-          .snapshots(),
+      stream:
+          _firestore
+              .collection('chatRooms')
+              .doc(chatRoomId)
+              .collection('messages')
+              .orderBy('timestamp', descending: false)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -248,21 +295,26 @@ class _ChatPageState extends State<MessageScreen> {
         final messages = snapshot.data!.docs;
 
         // Scroll to bottom when new messages arrive
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom(animate: false));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToBottom(animate: false),
+        );
 
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: messages.length,
+          itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            final data = messages[index].data() as Map<String, dynamic>;
-            final isMe = data['senderId'] == currentUserId;
-            final isSelected = _selectedMessageId == messages[index].id;
+            final document = snapshot.data!.docs[index];
+            Map<String, dynamic> data = document.data() as Map<String, dynamic>;
+            final isMe = data['senderId'] == _firebaseAuth.currentUser!.uid;
+            final isSelected = _selectedMessageId == document.id;
+            final bool showAvatar =
+                true; // Define showAvatar based on your logic
 
             return GestureDetector(
               onLongPress: () {
                 setState(() {
-                  _selectedMessageId = isSelected ? null : messages[index].id;
+                  _selectedMessageId = isSelected ? null : document.id;
                 });
               },
               child: TweenAnimationBuilder(
@@ -284,6 +336,25 @@ class _ChatPageState extends State<MessageScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      if (data['isUnread'] == true)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Unread',
+                            style: TextStyle(fontSize: 10, color: Colors.red),
+                          ),
+                        ),
+
+                      if (!isMe && showAvatar)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4, bottom: 0),
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundImage: NetworkImage(
+                              widget.receiverUserphotoUrl,
+                            ),
+                          ),
+                        ),
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -299,7 +370,10 @@ class _ChatPageState extends State<MessageScreen> {
                                 bottomRight: const Radius.circular(15),
                               ),
                               elevation: 0,
-                              color: isMe ? Color.fromARGB(255, 0, 143, 48) : Color.fromARGB(255, 0, 0, 0),
+                              color:
+                                  isMe
+                                      ? Color.fromARGB(255, 0, 143, 48)
+                                      : Color.fromARGB(255, 0, 0, 0),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -315,6 +389,17 @@ class _ChatPageState extends State<MessageScreen> {
                                 ),
                               ),
                             ),
+                            if (isSelected && data['timestamp'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  _formatTimestamp(data['timestamp']),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),

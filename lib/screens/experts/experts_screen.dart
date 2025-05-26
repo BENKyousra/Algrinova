@@ -115,24 +115,22 @@ Widget _buildExpertCard(Expert expert) {
             ClipRRect(
               borderRadius: BorderRadius.circular(50),
               child: Image.network(
-  expert.imagePath,
-  height: 70,
-  width: 70,
-  fit: BoxFit.cover,
-  loadingBuilder: (context, child, loadingProgress) {
-    if (loadingProgress == null) return child;
-    return SizedBox(
-      height: 70,
-      width: 70,
-      child: Center(child: CircularProgressIndicator()),
-    );
-  },
-  errorBuilder: (context, error, stackTrace) {
-    return const Icon(Icons.error, size: 70);
-  },
-),
-
-
+                    expert.imagePath,
+                    height: 70,
+                    width: 70,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return SizedBox(
+                        height: 70,
+                        width: 70,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(Icons.error, size: 70);
+                    },
+                  ),
             ),
             SizedBox(width: 16),
             Expanded(

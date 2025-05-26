@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:algrinova/services/post_service.dart';
+
 
 class UserService {
   final CollectionReference _usersCollection = FirebaseFirestore.instance.collection('users');
@@ -31,23 +33,18 @@ class UserService {
   required Map<String, dynamic> data,
   File? imageFile,
 }) async {
-  try {
-    if (imageFile != null) {
-      final storageRef = _storage.ref().child('profile_pictures/$uid.jpg');
-      await storageRef.putFile(imageFile);
-      final imageUrl = await storageRef.getDownloadURL();
-      data['photoUrl'] = imageUrl;
+  String? photoUrl;
+
+  if (imageFile != null) {
+    photoUrl = await uploadImageToCloudinary(imageFile);
+    if (photoUrl != null) {
+      data['photoUrl'] = photoUrl;
     }
-
-    await _usersCollection.doc(uid).update(data);
-
-    print("✅ Profil mis à jour avec succès");
-  } catch (e, stacktrace) {
-    print("❌ Erreur dans updateUserProfileWithImage : $e");
-    print("🧱 Stacktrace : $stacktrace");
-    rethrow;
   }
+
+  await FirebaseFirestore.instance.collection('users').doc(uid).update(data);
 }
+
 
   /// Récupère les infos du profil utilisateur
   Future<DocumentSnapshot> getUserProfile(String uid) async {
@@ -102,5 +99,13 @@ class UserService {
   final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
   return doc.data()!;
 }
+
+Future<List<String>> getAllUserIds() async {
+  final querySnapshot = await FirebaseFirestore.instance.collection('users').get();
+  // Chaque document représente un utilisateur, son ID est l'UID
+  List<String> allUids = querySnapshot.docs.map((doc) => doc.id).toList();
+  return allUids;
+}
+
 
 }

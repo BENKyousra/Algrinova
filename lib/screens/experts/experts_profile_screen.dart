@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algrinova/services/user_service.dart'; // ici on importe UserService
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:algrinova/screens/home/post_details_screen.dart';
 
 
 class ExpertProfileScreen extends StatelessWidget {
@@ -238,57 +239,72 @@ const SizedBox(height: 5),
 
                       // 🔽 Affichage des posts 🔽
                       FutureBuilder<QuerySnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('posts')
-                            .where('userId', isEqualTo: expertId)
-                            .orderBy('timestamp', descending: true)
-                            .get(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
+                            future: FirebaseFirestore.instance
+                                .collection('posts')
+                                .doc(expertId)
+                                .collection('userPosts')
+                                .orderBy('timestamp', descending: true)
+                                .get(),
+                            builder: (context, snapshot) {
+  if (snapshot.connectionState == ConnectionState.waiting) {
+    return Center(child: CircularProgressIndicator());
+  }
 
-                          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text("Aucune publication disponible."),
-                            );
-                          }
+  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+    return Center(child: Text('Aucune publication'));
+  }
 
-                          final posts = snapshot.data!.docs;
+  final posts = snapshot.data!.docs;
 
-                          return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: posts.length,
-                            itemBuilder: (context, index) {
-                              final post = posts[index].data() as Map<String, dynamic>;
-                              return Card(
-                                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 2,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (post['imageUrl'] != null && post['imageUrl'] != '')
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: Image.network(post['imageUrl']),
-                                        ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        post['text'] ?? '',
-                                       ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
+  return GridView.builder(
+    shrinkWrap: true,
+    physics: NeverScrollableScrollPhysics(),
+    padding: EdgeInsets.all(4),
+    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 3,
+      crossAxisSpacing: 4,
+      mainAxisSpacing: 4,
+    ),
+    itemCount: posts.length,
+    itemBuilder: (context, index) {
+      final post = posts[index];
+      final imageUrl = post['imageUrl'];
+
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(
+                image: imageUrl,
+                caption: post['caption'] ?? '',
+                hashtag: post['hashtag'] ?? '',
+                name: post['name'] ?? '',
+                location: post['location'] ?? '',
+                likes: (post['likes'] != null) ? (post['likes'] as List).length : 0,
+                comments: post['comments'] ?? 0,
+                shares: post['shares'] ?? 0,
+                postId: post.id,
+                postOwnerUid: expertId,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            image: DecorationImage(
+              image: NetworkImage(imageUrl),
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+                          ),
                       const SizedBox(height: 20),
                     ],
                   ),
