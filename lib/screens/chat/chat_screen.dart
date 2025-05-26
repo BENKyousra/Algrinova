@@ -124,15 +124,12 @@ class ChatScreenState extends State<ChatScreen> {
   }
 
   @override
-  void dispose() {
-    _updateUserStatus(false);
-    super.dispose();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Disposed successfully')));
-    });
-  }
+void dispose() {
+  _updateUserStatus(false);
+  _scrollController.dispose(); // Très important si tu l'as initialisé
+  super.dispose();
+}
+
 
   // دالة محدثة مع معالجة الأخطاء
   Future<void> _updateUserStatus(bool isOnline) async {
@@ -331,15 +328,23 @@ class ChatScreenState extends State<ChatScreen> {
 
         return FutureBuilder<List<ChatPartner?>>(
           future: Future.wait(
-            chatRoomsSnapshot.data!.docs.map((chatRoom) async {
-              final participants =
-                  (chatRoom['participants'] as List<dynamic>).cast<String>();
-              final partnerId = participants.firstWhere(
-                (id) => id != currentUserId,
-              );
-              return await _getChatPartnerDetails(partnerId);
-            }).toList(),
-          ),
+  chatRoomsSnapshot.data!.docs.map((chatRoom) async {
+    final participants =
+        (chatRoom['participants'] as List<dynamic>).cast<String>();
+    final partnerId = participants.firstWhere(
+      (id) => id != currentUserId,
+    );
+
+    final partner = await _getChatPartnerDetails(partnerId);
+
+    // ✅ Vérifie que le widget est toujours monté avant de retourner quoi que ce soit
+    if (!mounted) return null;
+
+    return partner;
+  }).toList(),
+),
+
+
           builder: (context, partnersSnapshot) {
             if (partnersSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -364,7 +369,7 @@ class ChatScreenState extends State<ChatScreen> {
             return ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: filteredPartners.length,
-              
+
               itemBuilder: (context, index) {
                 final partner = filteredPartners[index]!;
                 final chatRoom = chatRoomsSnapshot.data!.docs[index];
@@ -447,7 +452,11 @@ class ChatScreenState extends State<ChatScreen> {
                     subtitle: Text(
                       lastMessage,
                       style: TextStyle(
-                        color: userUnreadCount > 0 ? const Color.fromARGB(255, 0, 143, 48) : Colors.grey, fontWeight: FontWeight.bold ,
+                        color:
+                            userUnreadCount > 0
+                                ? const Color.fromARGB(255, 0, 143, 48)
+                                : Colors.grey,
+                        fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -472,7 +481,10 @@ class ChatScreenState extends State<ChatScreen> {
                               color: Color.fromARGB(255, 0, 0, 0),
                               shape: BoxShape.circle,
                               border: Border.fromBorderSide(
-                                BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 4),
+                                BorderSide(
+                                  color: Color.fromARGB(255, 0, 0, 0),
+                                  width: 4,
+                                ),
                               ),
                             ),
                             child: Text(
@@ -502,9 +514,12 @@ class ChatScreenState extends State<ChatScreen> {
                   ),
                 );
               },
-              separatorBuilder: (context, index) => Divider(
-          height: 0, thickness: 0.5, color: Colors.grey.withOpacity(0.5),
-        ),
+              separatorBuilder:
+                  (context, index) => Divider(
+                    height: 0,
+                    thickness: 0.5,
+                    color: Colors.grey.withOpacity(0.5),
+                  ),
             );
           },
         );
@@ -684,6 +699,7 @@ class ChatScreenState extends State<ChatScreen> {
 
       yield partners;
       await Future.delayed(const Duration(seconds: 1));
+      
     }
   }
 

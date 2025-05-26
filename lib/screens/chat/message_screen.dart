@@ -268,13 +268,17 @@ class _ChatPageState extends State<MessageScreen> {
       ),
     );
   }
+Widget _buildMessageList() {
+  final currentUserId = _firebaseAuth.currentUser?.uid;
 
-  Widget _buildMessageList() {
-    final currentUserId = _firebaseAuth.currentUser?.uid;
-    final chatRoomId = _generateChatRoomId(
-      widget.receiverUserId,
-      currentUserId ?? '',
-    );
+  if (currentUserId == null || widget.receiverUserId.isEmpty) {
+    return const Center(child: Text("Erreur : utilisateur non connecté."));
+  }
+
+  final chatRoomId = _generateChatRoomId(
+    widget.receiverUserId,
+    currentUserId,
+  );
 
     return StreamBuilder<QuerySnapshot>(
       stream:
@@ -295,9 +299,11 @@ class _ChatPageState extends State<MessageScreen> {
         final messages = snapshot.data!.docs;
 
         // Scroll to bottom when new messages arrive
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToBottom(animate: false),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (!mounted) return;
+  _scrollToBottom(animate: false);
+});
+
 
         return ListView.builder(
           controller: _scrollController,
