@@ -2,11 +2,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/screens/store/details.dart'; // تأكد من أن المسار صحيح
-import 'package:algrinova/models/product.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:group_button/group_button.dart';
-// import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'cart_screen.dart'; // Ensure this file contains the CartScreen class
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
+import 'package:algrinova/services/product_service.dart'; 
+
+
+class ProductModel {
+   final String id; 
+  final String name;
+  final double price;
+  final String? description;
+  final List<String> imageUrls; // important
+  final List<String> careInstructions;
+
+  ProductModel({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.imageUrls,
+    required this.careInstructions,
+    this.description,
+  });
+
+  factory ProductModel.fromFirestore(DocumentSnapshot doc){
+    final data = doc.data() as Map<String, dynamic>;
+    
+    return ProductModel(
+      id: doc.id, // C’EST TRÈS IMPORTANT !
+      name: data['name'] ?? '',
+      price: (data['price'] ?? 0).toDouble(),
+      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      careInstructions: List<String>.from(data['careInstructions'] ?? []),
+      description: data['description'] ?? '',
+    );
+  }
+
+  factory ProductModel.fromMap(Map<String, dynamic> data) {
+    return ProductModel(
+      id: data['id'] ?? '',
+      name: data['name'] ?? '',
+      price: (data['price'] ?? 0).toDouble(),
+      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      careInstructions: List<String>.from(data['careInstructions'] ?? []),
+      description: data['description'] ?? '',
+    );
+  }
+}
+
+
+
 
 // تعريف واجهة الصفحة الرئيسية
 class StoreScreen extends StatefulWidget {
@@ -17,7 +63,9 @@ class StoreScreen extends StatefulWidget {
 }
 
 class _StoreScreenState extends State<StoreScreen> {
-  // عناصر التحكم في التمرير وظهور الأدوات
+  final ProductService _productService = ProductService();
+  List<Map<String, dynamic>> _products = [];
+  bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
   bool _isVisible = true;
   final GroupButtonController _groupController = GroupButtonController();
@@ -25,95 +73,25 @@ class _StoreScreenState extends State<StoreScreen> {
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final FocusNode _searchFocusNode = FocusNode();
+  List<Map<String, dynamic>> allProducts = [];
+  List<Map<String, dynamic>> filteredProducts = [];
 
-  List<Product> get filteredProducts {
-    return products.where((product) {
-      final matchesCategory =
-          _selectedCategory == 'All' || product.category == _selectedCategory;
-      final matchesSearch =
-          _searchQuery.isEmpty ||
-          product.name.toLowerCase().startsWith(_searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    }).toList();
+  Future<void> _loadProductsFromFirestore() async {
+    final productService = ProductService();
+    allProducts = await productService.getAllProducts();
+
+    setState(() {
+      filteredProducts = allProducts; // Affiche tout au début
+      _isLoading = false;
+    });
   }
 
-  // قائمة المنتجات
-  final List<Product> products = [
-    Product(
-      id: 1,
-      name: "Lavender",
-      price: 1500,
-      image: "assets/images/roses.jpg",
-      description:
-          "Lavender is a fragrant plant known for its calming properties.",
-      careInstructions: [
-        "Water every 7 days",
-        "18–25°C",
-        "Does not like light",
-      ],
-      category: "Plants",
-    ),
-    Product(
-      id: 2,
-      name: "Monstera",
-      price: 800,
-      image: "assets/images/rose seed.jpg",
-      description: "Monstera is a tropical plant with unique split leaves.",
-      careInstructions: [
-        "Water every 7 days",
-        "18–25°C",
-        "Does not like light",
-      ],
-      category: "Plants",
-    ),
-    Product(
-      id: 3,
-      name: "Rose seed",
-      price: 1500,
-      image: "assets/images/rose seed.jpg",
-      description: "Lemon trees produce citrus fruit rich in vitamin C.",
-      careInstructions: [
-        "Water every 7 days",
-        "18–25°C",
-        "Does not like light",
-      ],
-      category: "Seeds",
-    ),
-    Product(
-      id: 4,
-      name: "Olive",
-      price: 800,
-      image: "assets/images/roses.jpg",
-      description: "Olive trees are known for their fruit and oil.",
-      careInstructions: [
-        "Water every 7 days",
-        "18–25°C",
-        "Does not like light",
-      ],
-      category: "Seedlings",
-    ),
-    Product(
-      id: 5,
-      name: "Roses",
-      price: 2000,
-      image: "assets/images/roses.jpg",
-      description: "Roses is a lovely plant known for its calming properties.",
-      careInstructions: [
-        "Water every 7 days",
-        "18–25°C",
-        "Does not like light",
-      ],
-      category: "Plants",
-    ),
-  ];
 
   @override
   void initState() {
     super.initState();
-    // تعيين "All" كمحدد افتراضي
-    _selectedCategory = 'All'; // تأكد من أن هذه القيمة مطابقة للزر في القائمة
-    // تحديد الزر الأول (All)
-    // إخفاء المؤشر عند الضغط على زر الرجوع
+    _loadProductsFromFirestore();
+    _selectedCategory = 'All';
     _searchFocusNode.addListener(() {
       if (!_searchFocusNode.hasFocus) {
         setState(() {
@@ -146,11 +124,12 @@ class _StoreScreenState extends State<StoreScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _scrollController.dispose();
+  super.dispose();
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -174,30 +153,46 @@ class _StoreScreenState extends State<StoreScreen> {
 
               _buildGroupButtons(),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 2,
-                    vertical: 0,
-                  ),
-                  child: GridView.builder(
-                    controller: _scrollController,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.7,
+                child:
+                    _isLoading
+                        ? Center(child: CircularProgressIndicator())
+                        : Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 0,
+                          ),
+                          child: GridView.builder(
+                            controller: _scrollController,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.7,
+                                ),
+                            itemCount: filteredProducts.length,
+                            itemBuilder: (context, index) {
+                              final productMap = filteredProducts[index];
+                              final product = ProductModel.fromMap(productMap);
+                              
+                                  return GestureDetector(
+                                    onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => Details(
+                                              product: product, // récupéré depuis Firestore
+                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: _buildProductCard(product), 
+                                  );
+                            },
+                            
+                          ),
                         ),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      return GestureDetector(
-                        onTap: () => _showProductDetails(context, product),
-                        child: _buildProductCard(product),
-                      );
-                    },
-                  ),
-                ),
               ),
             ],
           ),
@@ -308,7 +303,7 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   // دالة لعرض بطاقة المنتج
-  Widget _buildProductCard(Product product) {
+  Widget _buildProductCard(ProductModel product) {
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 1, vertical: 0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -319,13 +314,23 @@ class _StoreScreenState extends State<StoreScreen> {
           // صورة المنتج مع إمكانية عرضها بالحجم الكامل
           Expanded(
             child: GestureDetector(
-              onTap: () => _showZoomImage(context, product.image),
+               onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => Details(
+                                              product: product, // récupéré depuis Firestore
+                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
+                                            ),
+                                          ),
+                                        );
+                                      },
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(15),
                 ),
-                child: Image.asset(
-                  product.image,
+                child: Image.network(
+                  product.imageUrls[0],
                   fit: BoxFit.cover,
                   width: double.infinity,
                 ),
@@ -362,7 +367,17 @@ class _StoreScreenState extends State<StoreScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 25),
                   child: GestureDetector(
-                    onTap: () => _showProductDetails(context, product),
+                     onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => Details(
+                                              product: product, // récupéré depuis Firestore
+                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
+                                            ),
+                                          ),
+                                        );
+                                      },
                     child: Icon(
                       Icons.add_shopping_cart,
                       color: Color.fromARGB(255, 0, 143, 48),
@@ -379,40 +394,28 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   // دالة عرض تفاصيل المنتج
-  void _showProductDetails(BuildContext context, Product product) {
+  void _showProductDetails(BuildContext context, ProductModel productModel) {
+    // Convert ProductModel to Product and provide careInstructions
+    final product = ProductModel(
+      id: productModel.id,
+      name: productModel.name,
+      description: productModel.description,
+      price: productModel.price,
+      imageUrls: productModel.imageUrls,
+      careInstructions: productModel.careInstructions,
+    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder:
-          (context) => Details(
-            product: product,
-            careInstructions: product.careInstructions,
-          ),
+      builder: (context) => Details(
+        product: product,
+        careInstructions: product.careInstructions,
+      ),
     );
   }
 
-  // عرض الصورة بالحجم الكامل
-  void _showZoomImage(BuildContext context, String imagePath) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Image Zoom",
-      // ignore: deprecated_member_use
-      barrierColor: Colors.black.withOpacity(0.8), // خلفية شفافة داكنة
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return GestureDetector(
-          onTap: () => Navigator.of(context).pop(), // إغلاق عند الضغط
-          child: Center(
-            child: InteractiveViewer(child: Image.asset(imagePath)),
-          ),
-        );
-      },
-    );
-  }
-
-  // شريط البحث
+ // شريط البحث
   Widget _buildSearchBar() {
     return Container(
       width: 300,
@@ -446,55 +449,6 @@ class _StoreScreenState extends State<StoreScreen> {
       ),
     );
   }
-
-  // Widget _buildGroupButtons() {
-  //   return AnimatedContainer(
-  //     duration: const Duration(milliseconds: 300),
-  //     height: _showGroupButtons ? 50 : 0,
-  //     child: Padding(
-  //       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
-  //       child: SingleChildScrollView(
-  //         scrollDirection: Axis.horizontal,
-  //         child: GroupButton(
-  //           controller: _groupController,
-  //           isRadio: true,
-  //           buttons: const [
-  //             'All',
-  //             'Seeds',
-  //             'Seedlings',
-  //             'Accessories',
-  //             'Tools',
-  //             'Plants',
-  //             'Soil',
-  //             'Fertilizers',
-  //           ],
-  //           onSelected: (text, index, isSelected) {
-  //             setState(() {
-  //               _selectedCategory = text;
-  //             });
-  //           },
-
-  //           options: GroupButtonOptions(
-  //             borderRadius: BorderRadius.circular(20),
-  //             spacing: 8,
-  //             selectedTextStyle: const TextStyle(
-  //               fontSize: 14,
-  //               fontWeight: FontWeight.bold,
-  //               color: Colors.white,
-  //             ),
-  //             selectedColor: Colors.black,
-  //             unselectedTextStyle: const TextStyle(
-  //               fontSize: 14,
-  //               fontWeight: FontWeight.bold,
-  //               color: Colors.black,
-  //             ),
-  //             unselectedColor:  Color.fromARGB(255, 206, 206, 206),
-  //           ),
-  //         ),
-  //       ),
-  //     ),
-  //   );
-  // }
 
   // رأس الصفحة المنحني
   Widget _buildCurvedHeader() {

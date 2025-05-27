@@ -6,6 +6,8 @@ import 'package:algrinova/services/user_service.dart';
 import 'package:algrinova/screens/home/post_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
+   final String? uid; //  إمكانية تمرير uid من الخارج جزء مضاف
+  const ProfileScreen({Key? key, this.uid}) : super(key: key);
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -261,6 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shares: post['shares'] ?? 0,
                 postId: post.id,
                 postOwnerUid: post['uid'] ?? '',
+                ownerId: post['uid'] ?? '',
               ),
             ),
           );

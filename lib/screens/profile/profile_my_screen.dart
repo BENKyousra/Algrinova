@@ -254,6 +254,7 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                 shares: post['shares'] ?? 0,
                 postId: post.id,
                 postOwnerUid: uid,
+                ownerId: uid,
               ),
             ),
           );

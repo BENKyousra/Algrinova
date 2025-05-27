@@ -1,7 +1,9 @@
-import 'product.dart';
+import 'package:algrinova/screens/store/store_screen.dart';
+
+
 
 class CartItem {
-  final Product product;
+  final ProductModel product;
   int quantity;
 
   CartItem({required this.product, this.quantity = 1});

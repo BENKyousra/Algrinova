@@ -76,33 +76,17 @@ Future<void> syncAllPostsToGlobalCollection() async {
   }
 }
 
-
-  // Stream<List<Map<String, dynamic>>> getUserPosts(String userId) {
-  //   return _firestore
-  //       .collection('posts')
-  //       .doc(userId)
-  //       .collection('userPosts')
-  //       .orderBy('timestamp', descending: true)
-  //       .snapshots()
-  //       .map(
-  //         (snapshot) =>
-  //             snapshot.docs
-  //                 .map((doc) => doc.data() as Map<String, dynamic>)
-  //                 .toList(),
-  //       );
-  // }
-
   Future<void> toggleLike(String ownerId, String postId, String userId) async {
     DocumentReference postRef = _firestore
         .collection('posts')
-        .doc(userId)
+        .doc(ownerId)
         .collection('userPosts')
         .doc(postId);
 
     DocumentSnapshot postSnapshot = await postRef.get();
     List<dynamic> currentLikes = (postSnapshot.data() as Map<String, dynamic>?)?['likes'] ?? [];
 
-    if (currentLikes.contains(userId)) {
+    if (currentLikes.contains(ownerId)) {
       // Déjà liké → supprimer l'UID
       await postRef.update({
         'likes': FieldValue.arrayRemove([userId]),
@@ -195,7 +179,7 @@ Future<void> syncAllPostsToGlobalCollection() async {
             'caption': caption,
             'hashtag': hashtag,
             'imageUrl': imageUrl,
-            'likes': [0],
+            'likes': [],
             'timestamp': now,
             'comments': 0,
             'shares': 0,

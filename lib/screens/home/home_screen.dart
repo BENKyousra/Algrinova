@@ -9,8 +9,8 @@ import 'package:algrinova/services/user_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:algrinova/services/cloudinary_service.dart';
+import 'package:algrinova/screens/home/search_screen.dart';
+
 
 final PostService postService = PostService();
 
@@ -203,7 +203,7 @@ void _syncGlobalPosts() async {
               top: _isVisible ? 95 : -50,
               left: 20,
               right: 20,
-              child: _buildSearchBar(),
+              child: _buildSearchBar(context),
             ),
           ],
         ),
@@ -538,6 +538,7 @@ void _syncGlobalPosts() async {
                       shares: shares,
                       postId: postId,
                       postOwnerUid: userId,
+                      ownerId: userId, // Ajout du paramètre requis
                     ),
               ),
             );
@@ -703,8 +704,15 @@ void _syncGlobalPosts() async {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
+  Widget _buildSearchBar(BuildContext context) {
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => SearchScreen()),
+      );
+    },
+    child: Container(
       width: 300,
       height: 45,
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 1),
@@ -719,23 +727,20 @@ void _syncGlobalPosts() async {
         ),
         borderRadius: BorderRadius.circular(30),
       ),
-      child: TextField(
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value.toLowerCase();
-          });
-        },
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: "Rechercher...",
-          hintStyle: TextStyle(color: Colors.white70),
-          border: InputBorder.none,
-          icon: Icon(Icons.search, color: Colors.white),
-        ),
-        style: TextStyle(color: Colors.white),
+      child: Row(
+        children: [
+          Icon(Icons.search, color: Colors.white),
+          SizedBox(width: 8),
+          Text(
+            "Rechercher...",
+            style: TextStyle(color: Colors.white70,fontFamily: 'Quicksand'),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
 
 Widget _buildCurvedHeader() {

@@ -3,111 +3,70 @@ import 'package:provider/provider.dart';
 import '../../provider/cart_provider.dart';
 import '../../models/cart_item.dart';
 import 'payment_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final cart = Provider.of<CartProvider>(context);
-    final cartItems = cart.items;
+  State<CartScreen> createState() => _CartScreenState();
+}
 
-    return Scaffold(
-      appBar: _buildAppBar(context),
-      backgroundColor: Colors.white,
+class _CartScreenState extends State<CartScreen> {
+  bool _isLoading = true;
 
-      body: _buildBody(context, cartItems),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadCart();
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(80),
-      child: AppBar(
-        backgroundColor: const Color(0xFF00290E),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage("assets/images/blur.png"),
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 33), // مساحة إضافية من الأعلى
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.shopping_cart,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "Shopping Cart",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24, // حجم خط أكبر
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              // ignore: deprecated_member_use
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  // ignore: deprecated_member_use
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.more_vert,
+  Future<void> _loadCart() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      await cart.fetchCartFromFirestore(userId);
+    }
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+   final cart = Provider.of<CartProvider>(context);
+    final cartItems = cart.items;
+
+
+    return Scaffold(
+      appBar: PreferredSize(
+          preferredSize: Size.fromHeight(kToolbarHeight),
+          child: ClipRRect(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+            child: AppBar(
+              title: Text(
+                'Shopping cart',
+                style: TextStyle(
                   color: Colors.white,
-                  size: 20,
+                  fontSize: 25,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              onPressed: () {
-                // يمكنك إضافة قائمة منبثقة هنا
-              },
+              flexibleSpace: Image.asset(
+                'assets/images/blur.png',
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              iconTheme: IconThemeData(color: Colors.white),
             ),
           ),
-        ],
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
         ),
-      ),
+
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildBody(context, cartItems),
     );
   }
 
@@ -154,8 +113,8 @@ class CartScreen extends StatelessWidget {
                 // ✅ صورة المنتج باستخدام Image.asset مباشرة
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    item.product.image,
+                  child: Image.network(
+                    item.product.imageUrls[0],
                     width: 60,
                     height: 60,
                     fit: BoxFit.cover,

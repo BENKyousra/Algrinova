@@ -18,6 +18,9 @@ class PostDetailScreen extends StatefulWidget {
   final bool scrollToComment;
   final String postId;
   final String postOwnerUid;
+  final String ownerId;
+
+  // Removed incorrect PostDetailsScreen constructor
 
   const PostDetailScreen({
     required this.name,
@@ -29,6 +32,7 @@ class PostDetailScreen extends StatefulWidget {
     required this.comments,
     required this.shares,
     required this.postId,
+    required this.ownerId,
     required this.postOwnerUid,
     this.scrollToComment = false,
   });
@@ -39,9 +43,15 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   String? caption;
-String? hashtag;
-bool isLoadingPostData = true;
- String? _currentPhotoUrl;
+  String? hashtag;
+  bool isLoadingPostData = true;
+  String? _currentPhotoUrl;
+  late String ownerId;
+  late String postId;
+  late String currentUserId;
+  List<String> likes = [];
+  bool get isLiked => likes.contains(currentUserId);
+
 
 
   final TextEditingController _commentController = TextEditingController();
@@ -91,6 +101,9 @@ String _formatTimestamp(Timestamp timestamp) {
 @override
 void initState() {
   super.initState();
+  currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  ownerId = widget.ownerId;
+    postId = widget.postId;
    _fetchUserPhotoUrl().then((_) {
     setState(() {
       isLoadingPostData = false;
@@ -410,25 +423,41 @@ void _showEditDialog() {
                   // Bar d'actions
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-InkWell(
-  onTap: () async {
-    final ownerId = widget.postOwnerUid;
-    final postId = widget.postId;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return; // Prevent calling with null userId
-    await PostService().toggleLike(ownerId, postId, userId);
-    setState(() {}); // force la reconstruction si nécessaire
-  },
-
-                        child: Row(
-                          children: [
-                            Icon(Icons.favorite, color: Color.fromRGBO(80, 80, 80, 1)),
-                            SizedBox(width: 5),
-                            Text(widget.likes.toString()),
-                          ],
-                        ),
+                    children: [InkWell(
+                      onTap: () async {
+                        // Récupère l'ID de l'utilisateur courant
+                        final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                        if (currentUserId == null) return;
+                        
+                        // mets à jour Firestore
+                              await postService.toggleLike(
+                                  widget.ownerId,     // ✅ Propriétaire du post
+                                  widget.postId,      // ✅ ID du post
+                                  currentUserId,      // ✅ Utilisateur qui like
+                                  );
+                        // mets à jour localement
+                        setState(() {
+                          if (isLiked) {
+                            likes.remove(currentUserId);
+                          } else {
+                            likes.add(currentUserId);
+                          }
+                        });
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.favorite,
+                            color:
+                                isLiked
+                                    ? Color.fromARGB(255, 255, 47, 92)
+                                    : Color.fromRGBO(80, 80, 80, 1),
+                          ),
+                          SizedBox(width: 5),
+                          Text(likes.length.toString()),
+                        ],
                       ),
+                    ),
                       InkWell(
                         onTap: _addComment,
                         child: Row(

@@ -268,6 +268,7 @@ const SizedBox(height: 5),
                 shares: post['shares'] ?? 0,
                 postId: post.id,
                 postOwnerUid: expertId,
+                ownerId: expertId,
               ),
             ),
           );
