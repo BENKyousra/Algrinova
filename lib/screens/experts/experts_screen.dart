@@ -4,9 +4,9 @@ import 'package:algrinova/widgets/custom_bottom_navbar.dart';
 import 'package:algrinova/screens/experts/experts_profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
-
 class ExpertsScreen extends StatefulWidget {
+  const ExpertsScreen({super.key});
+
   @override
   _ExpertsScreenState createState() => _ExpertsScreenState();
 }
@@ -35,24 +35,25 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
   String _searchQuery = '';
   String _selectedSpecialty = '';
   double _selectedMinRating = 0;
-  bool _sortDescending = true; 
+  bool _sortDescending = true;
   bool _isSortActive = false;
 
-
-   List<Expert> _experts = [];
+  List<Expert> _experts = [];
 
   @override
   void initState() {
     super.initState();
     _loadExperts();
     _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
+      if (_scrollController.position.userScrollDirection ==
+          ScrollDirection.reverse) {
         if (_isVisible) {
           setState(() {
             _isVisible = false;
           });
         }
-      } else if (_scrollController.position.userScrollDirection == ScrollDirection.forward) {
+      } else if (_scrollController.position.userScrollDirection ==
+          ScrollDirection.forward) {
         if (!_isVisible) {
           setState(() {
             _isVisible = true;
@@ -71,213 +72,248 @@ class _ExpertsScreenState extends State<ExpertsScreen> {
   }
 
   Future<void> _loadExperts() async {
-  final querySnapshot = await FirebaseFirestore.instance
-      .collection('users')
-      .where('role', isEqualTo: 'expert')  // Filtre sur le rôle expert
-      .get();
+    final querySnapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isEqualTo: 'expert') // Filtre sur le rôle expert
+            .get();
 
- List<Expert> experts = querySnapshot.docs.map((doc) {
-  final data = doc.data();
-  return Expert(
-    id: doc.id,
-    name: data['name'] ?? '',
-    specialty: data['specialty'] ?? '',
-    rating: (data['rating'] ?? 0).toDouble(),
-    imagePath: data['photoUrl'] ?? 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png',
-  );
-}).toList();
+    List<Expert> experts =
+        querySnapshot.docs.map((doc) {
+          final data = doc.data();
+          return Expert(
+            id: doc.id,
+            name: data['name'] ?? '',
+            specialty: data['specialty'] ?? '',
+            rating: (data['rating'] ?? 0).toDouble(),
+            imagePath:
+                data['photoUrl'] ??
+                'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png',
+          );
+        }).toList();
 
+    setState(() {
+      _experts = experts;
+    });
+  }
 
-  setState(() {
-    _experts = experts;
-  });
-}
-
-
-Widget _buildExpertCard(Expert expert) {
-  return InkWell(
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ExpertProfileScreen(expertId: expert.id ),
-        ),
-      );
-    },
-    child: Card(
-      margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(9.0),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(50),
-              child: Image.network(
-                    expert.imagePath,
-                    height: 70,
-                    width: 70,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return SizedBox(
-                        height: 70,
-                        width: 70,
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.error, size: 70);
-                    },
-                  ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    expert.name,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  Text(
-                    expert.specialty,
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  Row(
-                    children: List.generate(
-                      5,
-                      (index) => Icon(
-                        index < expert.rating.round() ? Icons.star : Icons.star_border,
-                        color: Colors.amber,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Contact de ${expert.name}")),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color.fromARGB(255, 0, 0, 0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text("Contacter", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredExperts = _experts.where((expert) {
-      final matchesSearch = expert.name.toLowerCase().contains(_searchQuery) ||
-          expert.specialty.toLowerCase().contains(_searchQuery);
-      final matchesSpecialty = _selectedSpecialty.isEmpty || expert.specialty == _selectedSpecialty;
-      final matchesRating = expert.rating >= _selectedMinRating;
-      return matchesSearch && matchesSpecialty && matchesRating;
-    }).toList();
-    return GestureDetector(
-    onTap: () {
-    FocusScope.of(context).unfocus(); // Ferme le clavier et enlève le focus du champ
-  },
-  child:Scaffold(
-      bottomNavigationBar: CustomBottomNavBar(
-        context: context,
-        currentIndex: 1,
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              AnimatedContainer(
-                duration: Duration(milliseconds: 300),
-                height: _isVisible ? 155 : 0,
-                child: _buildCurvedHeader(),
-              ),
-              SizedBox(height: 5),
-              Column(
-              children: [
-                SizedBox(height: 5),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                                        children: [
-                                          ElevatedButton.icon(
-                                            onPressed: _showFilterDialog,
-                                            icon: Icon(Icons.filter_list, color: Colors.white), 
-                                            label: Text("Filtrer" , style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Color.fromARGB(255, 0, 0, 0),
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: 8),
-                                          ElevatedButton.icon(
-                                            onPressed: _sortSpecialistsByRating,
-                                            icon: Icon(color: Colors.white,
-                                             !_isSortActive ? Icons.sort : (_sortDescending ? Icons.arrow_downward : Icons.arrow_upward),
-                                            ),
-                                            label: Text("Trier",style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),  
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Color.fromARGB(255, 0, 0, 0),
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                            ),  
-                                          ),
-                                        ],
-                                      ),
-                  ),
-                ),
-              ]
+  Widget _buildExpertCard(Expert expert) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ExpertProfileScreen(expertId: expert.id),
           ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: EdgeInsets.only(top: 10),
-                  itemCount: filteredExperts.length,
-                  itemBuilder: (context, index) {
-                    final expert = filteredExperts[index];
-                    return _buildExpertCard(expert);
+        );
+      },
+      child: Card(
+        margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(9.0),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(50),
+                child: Image.network(
+                  expert.imagePath,
+                  height: 70,
+                  width: 70,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return SizedBox(
+                      height: 70,
+                      width: 70,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, size: 70);
                   },
                 ),
-
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      expert.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      expert.specialty,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    Row(
+                      children: List.generate(
+                        5,
+                        (index) => Icon(
+                          index < expert.rating.round()
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Contact de ${expert.name}")),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color.fromARGB(255, 0, 0, 0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  "Contact",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
-          AnimatedPositioned(
-            duration: Duration(milliseconds: 300),
-            top: _isVisible ? 95 : -50,
-            left: 20,
-            right: 20,
-            child: _buildSearchBar(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredExperts =
+        _experts.where((expert) {
+          final matchesSearch =
+              expert.name.toLowerCase().contains(_searchQuery) ||
+              expert.specialty.toLowerCase().contains(_searchQuery);
+          final matchesSpecialty =
+              _selectedSpecialty.isEmpty ||
+              expert.specialty == _selectedSpecialty;
+          final matchesRating = expert.rating >= _selectedMinRating;
+          return matchesSearch && matchesSpecialty && matchesRating;
+        }).toList();
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(
+          context,
+        ).unfocus(); // Ferme le clavier et enlève le focus du champ
+      },
+      child: Scaffold(
+        bottomNavigationBar: CustomBottomNavBar(
+          context: context,
+          currentIndex: 1,
+        ),
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                AnimatedContainer(
+                  duration: Duration(milliseconds: 300),
+                  height: _isVisible ? 155 : 0,
+                  child: _buildCurvedHeader(),
+                ),
+                SizedBox(height: 5),
+                Column(
+                  children: [
+                    SizedBox(height: 5),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _showFilterDialog,
+                              icon: Icon(
+                                Icons.filter_list,
+                                color: Colors.white,
+                              ),
+                              label: Text(
+                                "Filter",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color.fromARGB(255, 0, 0, 0),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: _sortSpecialistsByRating,
+                              icon: Icon(
+                                color: Colors.white,
+                                !_isSortActive
+                                    ? Icons.sort
+                                    : (_sortDescending
+                                        ? Icons.arrow_downward
+                                        : Icons.arrow_upward),
+                              ),
+                              label: Text(
+                                "Sort",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color.fromARGB(255, 0, 0, 0),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: EdgeInsets.only(top: 10),
+                    itemCount: filteredExperts.length,
+                    itemBuilder: (context, index) {
+                      final expert = filteredExperts[index];
+                      return _buildExpertCard(expert);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            AnimatedPositioned(
+              duration: Duration(milliseconds: 300),
+              top: _isVisible ? 95 : -50,
+              left: 20,
+              right: 20,
+              child: _buildSearchBar(),
             ),
           ],
         ),
       ),
-      );
+    );
   }
-
-
 
   Widget _buildCurvedHeader() {
     return Stack(
@@ -302,9 +338,9 @@ Widget _buildExpertCard(Expert expert) {
             children: [
               CircleAvatar(
                 backgroundColor: Colors.transparent,
-                child: Icon(Icons.eco_rounded, color: Colors.green),
+                child: Image.asset('assets/icon.png', width: 28, height: 28),
               ),
-              SizedBox(width: 10),
+              SizedBox(width: 5),
               Text(
                 "Algrinova",
                 style: TextStyle(
@@ -364,7 +400,7 @@ Widget _buildExpertCard(Expert expert) {
         },
         controller: _searchController,
         decoration: InputDecoration(
-          hintText: "Rechercher un expert...",
+          hintText: "Search...",
           hintStyle: TextStyle(color: Colors.white70),
           border: InputBorder.none,
           icon: Icon(Icons.search, color: Colors.white),
@@ -373,8 +409,8 @@ Widget _buildExpertCard(Expert expert) {
       ),
     );
   }
-  
- void _showFilterDialog() {
+
+  void _showFilterDialog() {
     String tempSpecialty = _selectedSpecialty;
     double tempMinRating = _selectedMinRating;
 
@@ -384,33 +420,39 @@ Widget _buildExpertCard(Expert expert) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              title: Text('Filtrer les experts'),
+              title: Text('Filter experts'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButton<String>(
                     isExpanded: true,
                     value: tempSpecialty.isEmpty ? null : tempSpecialty,
-                    hint: Text("Choisir une spécialité"),
-                    items: _experts
-                        .map((e) => e.specialty)
-                        .toSet()
-                        .map((spec) => DropdownMenuItem(
-                              child: Text(spec),
-                              value: spec,
-                            ))
-                        .toList(),
-                    onChanged: (value) => setModalState(() => tempSpecialty = value ?? ''),
+                    hint: Text("Choose a specialty"),
+                    items:
+                        _experts
+                            .map((e) => e.specialty)
+                            .toSet()
+                            .map(
+                              (spec) => DropdownMenuItem(
+                                value: spec,
+                                child: Text(spec),
+                              ),
+                            )
+                            .toList(),
+                    onChanged:
+                        (value) =>
+                            setModalState(() => tempSpecialty = value ?? ''),
                   ),
                   SizedBox(height: 20),
-                  Text("Note minimale : ${tempMinRating.toStringAsFixed(1)}"),
+                  Text("Minimum rating : ${tempMinRating.toStringAsFixed(1)}"),
                   Slider(
                     value: tempMinRating,
                     min: 0,
                     max: 5,
                     divisions: 5,
                     label: tempMinRating.toStringAsFixed(1),
-                    onChanged: (value) => setModalState(() => tempMinRating = value),
+                    onChanged:
+                        (value) => setModalState(() => tempMinRating = value),
                     thumbColor: Color.fromARGB(255, 0, 143, 48),
                     activeColor: Color.fromARGB(255, 0, 143, 48),
                   ),
@@ -418,7 +460,12 @@ Widget _buildExpertCard(Expert expert) {
               ),
               actions: [
                 TextButton(
-                  child: Text("Réinitialiser", style: TextStyle(color: const Color.fromARGB(255, 0, 143, 48))),
+                  child: Text(
+                    "Reset",
+                    style: TextStyle(
+                      color: const Color.fromARGB(255, 0, 143, 48),
+                    ),
+                  ),
                   onPressed: () {
                     setState(() {
                       _selectedSpecialty = '';
@@ -430,11 +477,15 @@ Widget _buildExpertCard(Expert expert) {
                   },
                 ),
                 TextButton(
-                  child: Text("Annuler", style: TextStyle(color: const Color.fromARGB(255, 255, 52, 83))),
+                  child: Text(
+                    "Cancel",
+                    style: TextStyle(
+                      color: const Color.fromARGB(255, 255, 52, 83),
+                    ),
+                  ),
                   onPressed: () => Navigator.pop(context),
                 ),
                 ElevatedButton(
-                  child: Text("Appliquer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color.fromARGB(255, 0, 0, 0),
                   ),
@@ -445,6 +496,13 @@ Widget _buildExpertCard(Expert expert) {
                     });
                     Navigator.pop(context);
                   },
+                  child: Text(
+                    "Apply",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -455,22 +513,19 @@ Widget _buildExpertCard(Expert expert) {
   }
 
   void _sortSpecialistsByRating() {
-  setState(() {
-    _isSortActive = true;
-    _sortDescending = !_sortDescending;
+    setState(() {
+      _isSortActive = true;
+      _sortDescending = !_sortDescending;
 
-    _experts.sort((a, b) {
-      double ratingA = a.rating;
-      double ratingB = b.rating;
-      return _sortDescending
-          ? ratingB.compareTo(ratingA)
-          : ratingA.compareTo(ratingB);
+      _experts.sort((a, b) {
+        double ratingA = a.rating;
+        double ratingB = b.rating;
+        return _sortDescending
+            ? ratingB.compareTo(ratingA)
+            : ratingA.compareTo(ratingB);
+      });
     });
-  });
-}
-
-
-
+  }
 }
 
 class CurveClipper extends CustomClipper<Path> {

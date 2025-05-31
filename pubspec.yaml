@@ -25,6 +25,8 @@ dependencies:
   cloud_firestore: ^4.15.0   # adapte si tu l'utilises
   firebase_storage: ^11.0.16
   firebase_app_check: ^0.2.2+4
+  firebase_dynamic_links: ^5.4.9
+  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.3
@@ -67,6 +69,7 @@ flutter:
     - assets/images/pexels-pixabay-159445.jpg
     - assets/images/pexels-alice1-30518938.jpg
     - assets/images/vecteezy_young-bright-green-zucchini-sprout-in-a-peat-pot_48836315.jpg
+    - assets/icon.png
     
 
   fonts:

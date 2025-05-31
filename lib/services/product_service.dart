@@ -13,4 +13,25 @@ class ProductService {
       return [];
     }
   }
+
+  Future<List<Map<String, dynamic>>> fetchProductsByCategory(String category) async {
+  QuerySnapshot snapshot;
+
+  if (category == 'All') {
+    snapshot = await FirebaseFirestore.instance.collection('products').get();
+  } else {
+    snapshot = await FirebaseFirestore.instance
+        .collection('product')
+        .where('category', isEqualTo: category)
+        .get();
+  }
+
+  return snapshot.docs.map((doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return data;
+  }).toList();
+}
+
+
 }

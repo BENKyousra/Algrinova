@@ -14,7 +14,7 @@ class ExpertProfileMyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final UserService _userService = UserService();
+    final UserService userService = UserService();
 
     return Scaffold(
       bottomNavigationBar: CustomBottomNavBar(
@@ -22,7 +22,7 @@ class ExpertProfileMyScreen extends StatelessWidget {
         currentIndex: 4,
       ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: _userService.getUserProfile(expertId),
+        future: userService.getUserProfile(expertId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

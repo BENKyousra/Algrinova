@@ -1,9 +1,11 @@
-import 'package:algrinova/screens/experts/experts_profile_screen.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algrinova/services/chat_service.dart';
-import 'package:algrinova/screens/chat/chat_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 class MessageScreen extends StatefulWidget {
   final String receiverUserId;
@@ -28,13 +30,16 @@ class _ChatPageState extends State<MessageScreen> {
   final ChatService _chatService = ChatService();
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final ScrollController _scrollController = ScrollController();
+  //final ScrollController _scrollController = ScrollController();
   final FocusNode _messageFocusNode = FocusNode();
+  final chatService = ChatService();
   String? _selectedMessageId; // سيخزن معرف الرسالة المحددة فقط
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _markMessagesAsRead();
   }
 
@@ -47,18 +52,23 @@ class _ChatPageState extends State<MessageScreen> {
   }
 
   Future<void> sendMessage() async {
+    // لا ترسل إذا كانت الرسالة فارغة
     if (_messageController.text.trim().isEmpty) return;
 
     try {
       await _chatService.sendMessage(
-        widget.receiverUserId,
-        _messageController.text.trim(),
+        receiverUserId: widget.receiverUserId,
+        message: _messageController.text.trim(),
       );
       _messageController.clear();
       _scrollToBottom();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: ${e.toString()}')),
+        SnackBar(
+          content: Text(
+            'An error occurred while sending the message: ${e.toString()}',
+          ),
+        ),
       );
     }
   }
@@ -128,9 +138,18 @@ class _ChatPageState extends State<MessageScreen> {
             ListTile(
               leading: Icon(Icons.delete, color: Colors.black),
               title: Text('Delete the conversation'),
-              onTap: () {
-                Navigator.pop(context);
-                // يمكنك إضافة وظيفة حذف المحادثة هنا
+              onTap: () async {
+                Navigator.pop(context); // إغلاق القائمة أولاً
+
+                // استدعاء دالة الحذف المشتركة
+                await ChatService().deleteChat(
+                  context: context,
+                  chatRoomId: _generateChatRoomId(
+                    widget.receiverUserId,
+                    _firebaseAuth.currentUser!.uid,
+                  ),
+                  partnerName: widget.receivername,
+                );
               },
             ),
             ListTile(
@@ -161,37 +180,10 @@ class _ChatPageState extends State<MessageScreen> {
       appBar: AppBar(
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.3),
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => ChatScreen(
-                      expertId: widget.receiverUserId,
-                      expertEmail: widget.receiverUserEmail,
-                    ),
-              ),
-            );
-          },
-        ),
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => ExpertProfileScreen(
-                          expertId: widget.receiverUserId,
-                        ),
-                  ),
-                );
-              },
               child: CircleAvatar(
                 radius: 22,
                 backgroundImage: NetworkImage(widget.receiverUserphotoUrl),
@@ -268,155 +260,364 @@ class _ChatPageState extends State<MessageScreen> {
       ),
     );
   }
-Widget _buildMessageList() {
-  final currentUserId = _firebaseAuth.currentUser?.uid;
 
-  if (currentUserId == null || widget.receiverUserId.isEmpty) {
-    return const Center(child: Text("Erreur : utilisateur non connecté."));
+  Widget _buildMessageList() {
+    final currentUserId = _firebaseAuth.currentUser?.uid;
+
+    if (currentUserId == null || widget.receiverUserId.isEmpty) {
+      return const Center(child: Text("Erreur : utilisateur non connecté."));
+    }
+
+    final chatRoomId = _generateChatRoomId(
+      widget.receiverUserId,
+      currentUserId,
+    );
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        // منع حدوث أخطاء عند التمرير
+        return true;
+      },
+      child: StreamBuilder<QuerySnapshot>(
+        stream:
+            _firestore
+                .collection('chatRooms')
+                .doc(chatRoomId)
+                .collection('messages')
+                .orderBy('timestamp', descending: false)
+                .snapshots(),
+        builder: (context, snapshot) {
+          // 1. التحقق من حالة الاتصال أولاً
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // 2. معالجة الأخطاء
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          // 3. حالة عدم وجود بيانات
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('no messages yet'));
+          }
+
+          // 4. التمرير التلقائي بشكل آمن
+          Future.delayed(Duration.zero, () {
+            if (_scrollController.hasClients && mounted) {
+              try {
+                _scrollController.jumpTo(
+                  _scrollController.position.maxScrollExtent,
+                );
+              } catch (e) {
+                debugPrint('Scroll error: $e');
+              }
+            }
+          });
+
+          return ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final document = snapshot.data!.docs[index];
+              final data = document.data() as Map<String, dynamic>;
+              final isMe = data['senderId'] == currentUserId;
+
+              // 5. التحقق من mounted قبل أي عملية تستخدم context
+              if (!mounted) return const SizedBox();
+
+              return _buildMessageItem(context, document, data, isMe);
+            },
+          );
+        },
+      ),
+    );
   }
 
-  final chatRoomId = _generateChatRoomId(
-    widget.receiverUserId,
-    currentUserId,
-  );
+  Widget _buildMessageItem(
+    BuildContext context,
+    QueryDocumentSnapshot document,
+    Map<String, dynamic> data,
+    bool isMe,
+  ) {
+    final isSelected = _selectedMessageId == document.id;
+    final isImage = data['contentType'] == 'image' && data['imageUrl'] != null;
+    final isDeleted = data['isDeleted'] == true;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream:
-          _firestore
-              .collection('chatRooms')
-              .doc(chatRoomId)
-              .collection('messages')
-              .orderBy('timestamp', descending: false)
-              .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No messages yet.'));
-        }
+    if (isDeleted) {
+      return const SizedBox.shrink();
+    }
 
-        final messages = snapshot.data!.docs;
+    return Stack(
+      children: [
+        GestureDetector(
+          onLongPress: () async {
+            if (!mounted) return;
 
-        // Scroll to bottom when new messages arrive
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-  if (!mounted) return;
-  _scrollToBottom(animate: false);
-});
+            // 1. تأثير اهتزاز أكثر نعومة
+            await Future.wait([
+              HapticFeedback.lightImpact(),
+              // تأثير حركي صغير
+              SystemSound.play(SystemSoundType.click),
+            ]);
 
+            // 2. تأثير حركي عند التحديد/إلغاء التحديد
+            await Future.delayed(const Duration(milliseconds: 50));
 
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(16),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            final document = snapshot.data!.docs[index];
-            Map<String, dynamic> data = document.data() as Map<String, dynamic>;
-            final isMe = data['senderId'] == _firebaseAuth.currentUser!.uid;
-            final isSelected = _selectedMessageId == document.id;
-            final bool showAvatar =
-                true; // Define showAvatar based on your logic
+            if (mounted) {
+              setState(() {
+                _selectedMessageId = isSelected ? null : document.id;
+              });
+            }
 
-            return GestureDetector(
-              onLongPress: () {
-                setState(() {
-                  _selectedMessageId = isSelected ? null : document.id;
-                });
-              },
-              child: TweenAnimationBuilder(
-                tween: Tween<Offset>(
-                  begin: Offset(isMe ? 1 : -1, 0),
-                  end: Offset(0, 0),
-                ),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-                builder: (context, Offset offset, child) {
-                  return Transform.translate(offset: offset * 20, child: child);
-                },
-                child: Container(
-                  margin: EdgeInsets.only(
-                    bottom: 4,
-                    left: isMe ? 64 : 1,
-                    right: isMe ? 1 : 64,
+            // 3. تحسين توقيت الإغلاق التلقائي مع تأثير التلاشي
+            if (_selectedMessageId == document.id && mounted) {
+              await Future.delayed(const Duration(seconds: 2));
+
+              if (mounted && _selectedMessageId == document.id) {
+                // إضافة تأثير حركي عند الإغلاق
+                await HapticFeedback.selectionClick();
+                if (mounted) {
+                  setState(() => _selectedMessageId = null);
+                }
+              }
+            }
+          },
+          child: Container(
+            margin: EdgeInsets.only(
+              bottom: 4,
+              left: isMe ? 64 : 1,
+              right: isMe ? 1 : 64,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (data['isUnread'] == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Unread',
+                      style: TextStyle(fontSize: 10, color: Colors.red),
+                    ),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                if (!isMe)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4, bottom: 0),
+                    child: CircleAvatar(
+                      radius: 12,
+                      backgroundImage: NetworkImage(
+                        widget.receiverUserphotoUrl,
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        isMe
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
                     children: [
-                      if (data['isUnread'] == true)
+                      Align(
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Material(
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(12),
+                            topRight: const Radius.circular(12),
+                            bottomLeft: Radius.circular(isMe ? 15 : 0),
+                            bottomRight: Radius.circular(isMe ? 15 : 15),
+                          ),
+                          elevation: 0,
+                          color:
+                              isImage
+                                  ? Colors.transparent
+                                  : (isMe
+                                      ? Color.fromARGB(255, 0, 143, 48)
+                                      : Color.fromARGB(255, 0, 0, 0)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 10,
+                            ),
+                            child:
+                                isImage
+                                    ? GestureDetector(
+                                      onTap:
+                                          () =>
+                                              _showFullImage(data['imageUrl']),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          data['imageUrl'],
+                                          width: 200,
+                                          height: 200,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (
+                                            context,
+                                            child,
+                                            loadingProgress,
+                                          ) {
+                                            if (loadingProgress == null)
+                                              return child;
+                                            return Container(
+                                              width: 200,
+                                              height: 200,
+                                              color: Colors.grey[200],
+                                              child: Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                    : Text(
+                                      data['message'],
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                          ),
+                        ),
+                      ),
+                      if (isSelected && data['timestamp'] != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            'Unread',
-                            style: TextStyle(fontSize: 10, color: Colors.red),
-                          ),
-                        ),
-
-                      if (!isMe && showAvatar)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4, bottom: 0),
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundImage: NetworkImage(
-                              widget.receiverUserphotoUrl,
+                            _formatTimestamp(data['timestamp']),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[500],
                             ),
                           ),
                         ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              isMe
-                                  ? CrossAxisAlignment.end
-                                  : CrossAxisAlignment.start,
-                          children: [
-                            Material(
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(isMe ? 12 : 12),
-                                topRight: Radius.circular(isMe ? 12 : 12),
-                                bottomLeft: const Radius.circular(15),
-                                bottomRight: const Radius.circular(15),
-                              ),
-                              elevation: 0,
-                              color:
-                                  isMe
-                                      ? Color.fromARGB(255, 0, 143, 48)
-                                      : Color.fromARGB(255, 0, 0, 0),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 10,
-                                ),
-                                child: Text(
-                                  data['message'],
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: isMe ? Colors.white : Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (isSelected && data['timestamp'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  _formatTimestamp(data['timestamp']),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+        if (isSelected && isMe)
+          Positioned(
+            top: 8,
+            right: isMe ? null : 45,
+            left: isMe ? 45 : null,
+            child: Material(
+              borderRadius: BorderRadius.circular(16),
+              color: Colors.white,
+              elevation: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.copy, size: 18),
+                      color: Colors.blueGrey[700],
+                      splashRadius: 20,
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: data['message']));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('The message has been copied'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                        setState(() => _selectedMessageId = null);
+                      },
+                    ),
+                    Container(height: 20, width: 1, color: Colors.grey[300]),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline, size: 20),
+                      color: Colors.blueGrey[700],
+                      splashRadius: 20,
+                      onPressed: () {
+                        _showDeleteDialog(
+                          context,
+                          document.id,
+                          _generateChatRoomId(
+                            widget.receiverUserId,
+                            _firebaseAuth.currentUser!.uid,
+                          ),
+                        );
+                        setState(() => _selectedMessageId = null);
+                      },
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
-        );
-      },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showDeleteDialog(
+    BuildContext context,
+    String messageId,
+    String chatRoomId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Message'),
+            content: const Text('Do you really want to delete this message?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await _firestore
+            .collection('chatRooms')
+            .doc(chatRoomId)
+            .collection('messages')
+            .doc(messageId)
+            .update({'isDeleted': true});
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'An error occurred while deleting the message: ${e.toString()}',
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _showFullImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder:
+          (context) =>
+              Dialog(child: InteractiveViewer(child: Image.network(imageUrl))),
     );
   }
 
@@ -425,6 +626,15 @@ Widget _buildMessageList() {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
+          IconButton(
+            icon: Icon(
+              Icons.add_photo_alternate,
+              color: Colors.grey.shade700,
+              size: 31,
+            ),
+            onPressed: _pickAndSendImage,
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _messageController,
@@ -457,5 +667,40 @@ Widget _buildMessageList() {
         ],
       ),
     );
+  }
+
+  Future<void> _pickAndSendImage() async {
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+      );
+      if (pickedFile == null) return;
+
+      // عرض مؤشر تحميل
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      final imageFile = File(pickedFile.path);
+      await _chatService.sendMessage(
+        receiverUserId: widget.receiverUserId,
+        imageFile: imageFile,
+      );
+
+      // إغلاق مؤشر التحميل بعد الإرسال
+      Navigator.of(context).pop();
+      _scrollToBottom();
+    } catch (e) {
+      Navigator.of(context).pop(); // إغلاق مؤشر التحميل في حالة الخطأ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'An error occurred while sending the image: ${e.toString()}',
+          ),
+        ),
+      );
+    }
   }
 }

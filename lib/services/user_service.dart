@@ -13,6 +13,7 @@ class UserService {
   Future<void> saveUser(User user) async {
     try {
       await _usersCollection.doc(user.uid).set({
+        'uid': user.uid,
         'name': user.displayName ?? 'Nom inconnu',
         'email': user.email,
         'role': 'user', // par défaut, role = user

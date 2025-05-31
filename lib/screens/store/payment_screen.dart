@@ -45,23 +45,21 @@ class _PaymentPageState extends State<PaymentPage> {
         elevation: 2,
         automaticallyImplyLeading: false, // نمنع السلوك الافتراضي
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // زر الرجوع للخلف
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            // الشعار
-            Image.asset(
-              'assets/images/poste_algerie.png',
-              height: 60,
-              width: 60,
-            ),
-          ],
-        ),
+  children: [
+    IconButton(
+      icon: const Icon(Icons.arrow_back, color: Colors.black),
+      onPressed: () => Navigator.of(context).pop(),
+    ),
+    const Spacer(),
+    Image.asset(
+      'assets/images/poste_algerie.png',
+      height: 50,
+      width: 50,
+      fit: BoxFit.contain,
+    ),
+  ],
+),
+
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -125,77 +123,6 @@ class _PaymentPageState extends State<PaymentPage> {
               ),
               const SizedBox(height: 20),
 
-              // رقم البطاقة
-              TextFormField(
-                controller: cardNumberController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Numéro de la carte de crédit",
-                  border: OutlineInputBorder(),
-                ),
-                validator:
-                    (value) =>
-                        value == null || value.isEmpty ? 'Champ requis' : null,
-              ),
-              const SizedBox(height: 20),
-
-              // تاريخ الانتهاء
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedMonth,
-                      decoration: const InputDecoration(
-                        labelText: 'Mois',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          months
-                              .map(
-                                (month) => DropdownMenuItem(
-                                  value: month,
-                                  child: Text(month),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            selectedMonth = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedYear,
-                      decoration: const InputDecoration(
-                        labelText: 'Année',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          years
-                              .map(
-                                (year) => DropdownMenuItem(
-                                  value: year,
-                                  child: Text(year),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            selectedYear = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
 
               // الاسم الكامل
               TextFormField(
@@ -238,7 +165,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 2),
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: selectedYear,

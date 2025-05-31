@@ -16,7 +16,7 @@ class ExpertProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final UserService _userService = UserService();
+    final UserService userService = UserService();
 
     return Scaffold(
       bottomNavigationBar: CustomBottomNavBar(
@@ -206,7 +206,7 @@ class ExpertProfileScreen extends StatelessWidget {
                               );
                             },
                             label: const Text(
-                              "Contacter",
+                              "Contact",
                               style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                             style: ElevatedButton.styleFrom(
@@ -281,7 +281,7 @@ const SizedBox(height: 5),
                 hashtag: post['hashtag'] ?? '',
                 name: post['name'] ?? '',
                 location: post['location'] ?? '',
-                likes: (post['likes'] != null) ? (post['likes'] as List).length : 0,
+                likes: (post['likes'] != null) ? List<String>.from(post['likes']) : <String>[],
                 comments: post['comments'] ?? 0,
                 shares: post['shares'] ?? 0,
                 postId: post.id,

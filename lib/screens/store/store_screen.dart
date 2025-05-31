@@ -1,4 +1,3 @@
-// استيراد الحزم اللازمة
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/screens/store/details.dart'; // تأكد من أن المسار صحيح
@@ -6,11 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:group_button/group_button.dart';
 import 'cart_screen.dart'; // Ensure this file contains the CartScreen class
 import 'package:algrinova/widgets/custom_bottom_navbar.dart';
-import 'package:algrinova/services/product_service.dart'; 
-
+import 'package:algrinova/services/product_service.dart';
 
 class ProductModel {
-   final String id; 
+  final String id;
   final String name;
   final double price;
   final String? description;
@@ -26,9 +24,9 @@ class ProductModel {
     this.description,
   });
 
-  factory ProductModel.fromFirestore(DocumentSnapshot doc){
+  factory ProductModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    
+
     return ProductModel(
       id: doc.id, // C’EST TRÈS IMPORTANT !
       name: data['name'] ?? '',
@@ -51,9 +49,6 @@ class ProductModel {
   }
 }
 
-
-
-
 // تعريف واجهة الصفحة الرئيسية
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -64,17 +59,21 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreScreenState extends State<StoreScreen> {
   final ProductService _productService = ProductService();
-  List<Map<String, dynamic>> _products = [];
+  final List<Map<String, dynamic>> _products = [];
   bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
   bool _isVisible = true;
-  final GroupButtonController _groupController = GroupButtonController();
+ final GroupButtonController _groupController = GroupButtonController(
+  selectedIndex: 0, // 👈 sélectionne "All" par défaut
+);
+
   bool _showGroupButtons = true;
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final FocusNode _searchFocusNode = FocusNode();
   List<Map<String, dynamic>> allProducts = [];
   List<Map<String, dynamic>> filteredProducts = [];
+  
 
   Future<void> _loadProductsFromFirestore() async {
     final productService = ProductService();
@@ -86,11 +85,12 @@ class _StoreScreenState extends State<StoreScreen> {
     });
   }
 
-
   @override
   void initState() {
     super.initState();
+   
     _loadProductsFromFirestore();
+    _loadInitialProducts();
     _selectedCategory = 'All';
     _searchFocusNode.addListener(() {
       if (!_searchFocusNode.hasFocus) {
@@ -124,12 +124,19 @@ class _StoreScreenState extends State<StoreScreen> {
     });
   }
 
-@override
-void dispose() {
-  _scrollController.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
+  Future<void> _loadInitialProducts() async {
+    final products = await _productService.fetchProductsByCategory("All");
+    setState(() {
+      filteredProducts = products;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,13 +157,13 @@ void dispose() {
                 height: _isVisible ? 155 : 0,
                 child: _buildCurvedHeader(),
               ),
-
+              SizedBox(height: 10), // مسافة بين الرأس والمحتوى
               _buildGroupButtons(),
               Expanded(
                 child:
                     _isLoading
                         ? Center(child: CircularProgressIndicator())
-                        : Padding(
+                        : Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 2,
                             vertical: 0,
@@ -174,23 +181,26 @@ void dispose() {
                             itemBuilder: (context, index) {
                               final productMap = filteredProducts[index];
                               final product = ProductModel.fromMap(productMap);
-                              
-                                  return GestureDetector(
-                                    onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => Details(
-                                              product: product, // récupéré depuis Firestore
-                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
-                                            ),
+
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (context) => Details(
+                                            product:
+                                                product, // récupéré depuis Firestore
+                                            careInstructions:
+                                                product
+                                                    .careInstructions, // ou extrais depuis une propriété du produit
                                           ),
-                                        );
-                                      },
-                                      child: _buildProductCard(product), 
+                                    ),
                                   );
+                                },
+                                child: _buildProductCard(product),
+                              );
                             },
-                            
                           ),
                         ),
               ),
@@ -259,8 +269,10 @@ void dispose() {
 
   Widget _buildGroupButtons() {
     if (!_showGroupButtons) return SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+   
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10),  
+      color: 		Colors.transparent,     
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: GroupButton(
@@ -276,11 +288,15 @@ void dispose() {
             'Soil',
             'Fertilizers',
           ],
-          onSelected: (text, index, isSelected) {
-            setState(() {
-              _selectedCategory = text;
-            });
-          },
+          onSelected: (text, index, isSelected) async {
+  setState(() {
+    filteredProducts = text == 'All'  
+      ? allProducts 
+      : allProducts.where((product) => product['category'] == text).toList();
+  });
+},
+
+
           options: GroupButtonOptions(
             borderRadius: BorderRadius.circular(20),
             spacing: 8,
@@ -296,6 +312,7 @@ void dispose() {
               color: Colors.black,
             ),
             unselectedColor: Color.fromARGB(255, 217, 217, 217),
+            
           ),
         ),
       ),
@@ -314,17 +331,20 @@ void dispose() {
           // صورة المنتج مع إمكانية عرضها بالحجم الكامل
           Expanded(
             child: GestureDetector(
-               onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => Details(
-                                              product: product, // récupéré depuis Firestore
-                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
-                                            ),
-                                          ),
-                                        );
-                                      },
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => Details(
+                          product: product, // récupéré depuis Firestore
+                          careInstructions:
+                              product
+                                  .careInstructions, // ou extrais depuis une propriété du produit
+                        ),
+                  ),
+                );
+              },
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(15),
@@ -367,17 +387,20 @@ void dispose() {
                 Padding(
                   padding: const EdgeInsets.only(top: 25),
                   child: GestureDetector(
-                     onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => Details(
-                                              product: product, // récupéré depuis Firestore
-                                              careInstructions: product.careInstructions, // ou extrais depuis une propriété du produit
-                                            ),
-                                          ),
-                                        );
-                                      },
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => Details(
+                                product: product, // récupéré depuis Firestore
+                                careInstructions:
+                                    product
+                                        .careInstructions, // ou extrais depuis une propriété du produit
+                              ),
+                        ),
+                      );
+                    },
                     child: Icon(
                       Icons.add_shopping_cart,
                       color: Color.fromARGB(255, 0, 143, 48),
@@ -393,29 +416,7 @@ void dispose() {
     );
   }
 
-  // دالة عرض تفاصيل المنتج
-  void _showProductDetails(BuildContext context, ProductModel productModel) {
-    // Convert ProductModel to Product and provide careInstructions
-    final product = ProductModel(
-      id: productModel.id,
-      name: productModel.name,
-      description: productModel.description,
-      price: productModel.price,
-      imageUrls: productModel.imageUrls,
-      careInstructions: productModel.careInstructions,
-    );
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Details(
-        product: product,
-        careInstructions: product.careInstructions,
-      ),
-    );
-  }
-
- // شريط البحث
+  // شريط البحث
   Widget _buildSearchBar() {
     return Container(
       width: 300,
@@ -471,12 +472,12 @@ void dispose() {
           top: 40,
           left: 25,
           child: Row(
-            children: const [
+            children: [
               CircleAvatar(
                 backgroundColor: Colors.transparent,
-                child: Icon(Icons.eco_rounded, color: Colors.green),
+                child: Image.asset('assets/icon.png', width: 28, height: 28),
               ),
-              SizedBox(width: 10),
+              SizedBox(width: 5),
               Text(
                 "Algrinova",
                 style: TextStyle(

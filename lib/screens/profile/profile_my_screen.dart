@@ -8,6 +8,8 @@ import 'package:algrinova/screens/profile/settings_screen.dart';
 import 'package:algrinova/screens/home/post_details_screen.dart';
 
 class ProfileMyScreen extends StatefulWidget {
+  const ProfileMyScreen({super.key});
+
   @override
   _ProfileScreenMyState createState() => _ProfileScreenMyState();
 }
@@ -45,8 +47,12 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Erreur lors du chargement du profil.'));
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              !snapshot.data!.exists) {
+            return const Center(
+              child: Text('Erreur lors du chargement du profil.'),
+            );
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
@@ -85,11 +91,15 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => FavoritesScreen(),
+                                            builder:
+                                                (context) => FavoritesScreen(),
                                           ),
                                         );
                                       },
-                                      child: const Icon(Icons.favorite_rounded, color: Colors.white),
+                                      child: const Icon(
+                                        Icons.favorite_rounded,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                   Positioned(
@@ -100,11 +110,15 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => SettingsScreen(),
+                                            builder:
+                                                (context) => SettingsScreen(),
                                           ),
                                         );
                                       },
-                                      child: const Icon(Icons.settings, color: Colors.white),
+                                      child: const Icon(
+                                        Icons.settings,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                   const Align(
@@ -127,37 +141,45 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                             ),
                           ),
                           Positioned(
-  top: 90,
-  child: Stack(
-    children: [
-      CircleAvatar(
-        radius: 55,
-        backgroundColor: Colors.white,
-        child: CircleAvatar(
-          radius: 50,
-          backgroundImage: photoUrl != ""
-              ? NetworkImage(photoUrl)
-              : const AssetImage("assets/images/pexels-olly-3756616.jpg")
-                  as ImageProvider,
-        ),
-      ),
-      Positioned(
-        bottom: 6,
-        right: 6,
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            color: data['isOnline'] == true ? Colors.green : Colors.grey,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-
+                            top: 90,
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 55,
+                                  backgroundColor: Colors.white,
+                                  child: CircleAvatar(
+                                    radius: 50,
+                                    backgroundImage:
+                                        photoUrl != ""
+                                            ? NetworkImage(photoUrl)
+                                            : const AssetImage(
+                                                  "assets/images/pexels-olly-3756616.jpg",
+                                                )
+                                                as ImageProvider,
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 6,
+                                  right: 6,
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          data['isOnline'] == true
+                                              ? Colors.green
+                                              : Colors.grey,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -207,73 +229,81 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                       ),
                       const SizedBox(height: 10),
                       FutureBuilder<QuerySnapshot>(
-                            future: FirebaseFirestore.instance
+                        future:
+                            FirebaseFirestore.instance
                                 .collection('posts')
                                 .doc(uid)
                                 .collection('userPosts')
                                 .orderBy('timestamp', descending: true)
                                 .get(),
-                            builder: (context, snapshot) {
-  if (snapshot.connectionState == ConnectionState.waiting) {
-    return Center(child: CircularProgressIndicator());
-  }
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Center(child: CircularProgressIndicator());
+                          }
 
-  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-    return Center(child: Text('Aucune publication'));
-  }
+                          if (!snapshot.hasData ||
+                              snapshot.data!.docs.isEmpty) {
+                            return Center(child: Text('Aucune publication'));
+                          }
 
-  final posts = snapshot.data!.docs;
+                          final posts = snapshot.data!.docs;
 
-  return GridView.builder(
-    shrinkWrap: true,
-    physics: NeverScrollableScrollPhysics(),
-    padding: EdgeInsets.all(4),
-    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 3,
-      crossAxisSpacing: 4,
-      mainAxisSpacing: 4,
-    ),
-    itemCount: posts.length,
-    itemBuilder: (context, index) {
-      final post = posts[index];
-      final imageUrl = post['imageUrl'];
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: NeverScrollableScrollPhysics(),
+                            padding: EdgeInsets.all(4),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 4,
+                                  mainAxisSpacing: 4,
+                                ),
+                            itemCount: posts.length,
+                            itemBuilder: (context, index) {
+                              final post = posts[index];
+                              final imageUrl = post['imageUrl'];
 
-      return GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PostDetailScreen(
-                image: imageUrl,
-                caption: post['caption'] ?? '',
-                hashtag: post['hashtag'] ?? '',
-                name: post['name'] ?? '',
-                location: post['location'] ?? '',
-                likes: (post['likes'] != null) ? (post['likes'] as List).length : 0,
-                comments: post['comments'] ?? 0,
-                shares: post['shares'] ?? 0,
-                postId: post.id,
-                postOwnerUid: uid,
-                ownerId: uid,
-              ),
-            ),
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            image: DecorationImage(
-              image: NetworkImage(imageUrl),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      );
-    },
-  );
-}
-
-                          ),
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => PostDetailScreen(
+                                            image: imageUrl,
+                                            caption: post['caption'] ?? '',
+                                            hashtag: post['hashtag'] ?? '',
+                                            name: post['name'] ?? '',
+                                            location: post['location'] ?? '',
+                                             likes: (post['likes'] is List<String>)
+                                                ? post['likes'] as List<String>
+                                                : (post['likes'] is List)
+                                                    ? List<String>.from(post['likes'])
+                                                    : <String>[],
+                                            comments: post['comments'] ?? 0,
+                                            shares: post['shares'] ?? 0,
+                                            postId: post.id,
+                                            postOwnerUid: uid,
+                                            ownerId: uid,
+                                          ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    image: DecorationImage(
+                                      image: NetworkImage(imageUrl),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: 20),
                     ],
@@ -293,7 +323,12 @@ class BottomWaveClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final path = Path();
     path.lineTo(0, size.height - 40);
-    path.quadraticBezierTo(size.width / 2, size.height, size.width, size.height - 40);
+    path.quadraticBezierTo(
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 40,
+    );
     path.lineTo(size.width, 0);
     path.close();
     return path;

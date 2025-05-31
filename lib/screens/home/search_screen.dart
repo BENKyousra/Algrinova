@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algrinova/screens/profile/profile_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -19,17 +22,6 @@ class _SearchScreenState extends State<SearchScreen>
     _tabController = TabController(length: 3, vsync: this);
   }
 
-  // دوال البحث لكل تبويب
-  Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
-    if (query.isEmpty) return [];
-    final snapshot =
-        await _firestore
-            .collection('users')
-            .where('name', isGreaterThanOrEqualTo: query)
-            .where('name', isLessThanOrEqualTo: query + '\uf8ff')
-            .get();
-    return snapshot.docs.map((doc) => doc.data()).toList();
-  }
 
   Future<List<Map<String, dynamic>>> _searchPosts(String query) async {
     if (query.isEmpty) return [];
@@ -37,7 +29,7 @@ class _SearchScreenState extends State<SearchScreen>
         await _firestore
             .collection('allPosts')
             .where('caption', isGreaterThanOrEqualTo: query)
-            .where('caption', isLessThanOrEqualTo: query + '\uf8ff')
+            .where('caption', isLessThanOrEqualTo: '$query\uf8ff')
             .get();
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
@@ -52,12 +44,33 @@ class _SearchScreenState extends State<SearchScreen>
             .get();
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
+Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
+  // Appel Firestore pour récupérer les users correspondant à la recherche
+  QuerySnapshot snapshot = await FirebaseFirestore.instance
+      .collection('users')
+      .where('name', isGreaterThanOrEqualTo: query)
+      .where('name', isLessThanOrEqualTo: '$query\uf8ff')
+      .get();
+
+  // Transforme les docs en List<Map<String, dynamic>>
+  List<Map<String, dynamic>> results = snapshot.docs.map((doc) {
+    return {
+      'uid': doc.id,
+      'name': doc['name'],
+      'photoUrl': doc['photoUrl'] ?? '',
+    };
+  }).toList();
+
+  return results;
+}
 
   // الواجهات الفرعية لكل تبويب
   Widget _emptyState(String message) => Center(child: Text(message));
+  
   Widget _buildUsersTab() {
-    if (_searchQuery.isEmpty)
+    if (_searchQuery.isEmpty) {
       return _emptyState("Start typing to search users");
+    }
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _searchUsers(_searchQuery),
       builder: (context, snapshot) {
@@ -69,12 +82,19 @@ class _SearchScreenState extends State<SearchScreen>
           return _emptyState("No users found.");
         }
         final users = snapshot.data!;
+        print("Search results:");
+        for (var u in users) {
+          print("${u['name']} - ${u['uid']}");
+        }
+        final currentUid = FirebaseAuth.instance.currentUser!.uid;
+        final filteredUsers = users.where((u) => u['uid'] != currentUid).toList();
+        List<Map<String, dynamic>> searchResults = filteredUsers;
         return ListView.separated(
           padding: const EdgeInsets.all(12),
-          itemCount: users.length,
+          itemCount: searchResults.length,
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
-            final user = users[index];
+            final user = searchResults[index];
             final photoUrl =
                 user['photoUrl'] ??
                 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
@@ -85,13 +105,18 @@ class _SearchScreenState extends State<SearchScreen>
               ),
               title: Text(user['name'] ?? ''),
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfileScreen(uid: user['uid']),
-                  ),
-                );
-              },
+  final clickedUid = user['uid'];
+  print('User cliqué : ${user['name']} / uid: $clickedUid');
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ProfileScreen(uid: clickedUid), // 🔥 ICI
+    ),
+  );
+}
+
+
             );
           },
         );
@@ -100,8 +125,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildPostsTab() {
-    if (_searchQuery.isEmpty)
+    if (_searchQuery.isEmpty) {
       return _emptyState("Start typing to search posts");
+    }
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _searchPosts(_searchQuery),
       builder: (context, snapshot) {
@@ -144,8 +170,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildHashtagsTab() {
-    if (_searchQuery.isEmpty)
+    if (_searchQuery.isEmpty) {
       return _emptyState("Start typing to search hashtags");
+    }
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _searchHashtags(_searchQuery),
       builder: (context, snapshot) {
@@ -184,7 +211,7 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           children: [
             //ضيي
-            Container(
+            SizedBox(
               height: 220,
               child: Stack(
                 // القسم العلوي: الخلفية + خانة البحث + التبويبات
@@ -266,16 +293,21 @@ class _SearchScreenState extends State<SearchScreen>
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           top: 40,
           left: 25,
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.transparent,
-                child: Icon(Icons.eco_rounded, color: Colors.green),
-              ),
-              SizedBox(width: 10),
+              backgroundColor: Colors.transparent,
+              child: Image.asset(
+  'assets/icon.png',
+  width: 28,
+  height: 28,
+),
+
+            ),
+            SizedBox(width: 5),
               Text(
                 "Algrinova",
                 style: TextStyle(
@@ -394,4 +426,3 @@ class CurveClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
-

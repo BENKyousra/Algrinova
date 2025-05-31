@@ -1,3 +1,4 @@
+import 'package:algrinova/widgets/post_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart'; // ✅ Ajoute cette ligne
@@ -10,11 +11,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:algrinova/screens/home/search_screen.dart';
-
+import 'package:algrinova/services/favorites_service.dart';
 
 final PostService postService = PostService();
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -23,19 +26,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final PostService postService = PostService();
   final UserService userService = UserService();
   bool isLoadingPostData = true;
+  final FavoritesService _favoritesService = FavoritesService();
 
-  ScrollController _scrollController = ScrollController();
+  final bool _isLiked = false;
+
+  final ScrollController _scrollController = ScrollController();
   bool _isVisible = true;
-  TextEditingController _postController =
+  final TextEditingController _postController =
       TextEditingController(); // Contrôleur pour le champ de texte
   XFile? _pickedImage;
 
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  List<Map<String, dynamic>> _userPosts =
+  final String _searchQuery = '';
+  final List<Map<String, dynamic>> _userPosts =
       []; // Define _userPosts as a list of posts
-  List<Map<String, dynamic>> _posts = []; // <-- Add this line to define _posts
-
+  final List<Map<String, dynamic>> _posts =
+      []; // <-- Add this line to define _posts
 
   @override
   void initState() {
@@ -45,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_scrollController.position.userScrollDirection ==
           ScrollDirection.reverse) {
         if (_isVisible) {
+          if (!mounted) return;
           setState(() {
             _isVisible = false;
           });
@@ -52,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (_scrollController.position.userScrollDirection ==
           ScrollDirection.forward) {
         if (!_isVisible) {
+           if (!mounted) return;
           setState(() {
             _isVisible = true;
           });
@@ -67,11 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-
-
-void _syncGlobalPosts() async {
-  await PostService().syncAllPostsToGlobalCollection();
-}
+  void _syncGlobalPosts() async {
+    await PostService().syncAllPostsToGlobalCollection();
+  }
 
   String getPostId(dynamic postIdField) {
     if (postIdField == null) {
@@ -101,9 +107,9 @@ void _syncGlobalPosts() async {
   }
 
   Future<void> _refreshPosts() async {
-  setState(() {}); // Force le rebuild, relance le StreamBuilder
-}
-
+     if (!mounted) return;
+    setState(() {}); // Force le rebuild, relance le StreamBuilder
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,10 +130,14 @@ void _syncGlobalPosts() async {
               children: [
                 AnimatedContainer(
                   duration: Duration(milliseconds: 300),
-                  height: _isVisible ? 155 : 0,
+                  height:
+                      _isVisible
+                          ? 155
+                          : 0, // Ajuste la hauteur en fonction de la visibilité
                   child: _buildCurvedHeader(),
                 ),
-                SizedBox(height: 5),
+
+                // Espace entre le header et les posts
                 Expanded(
                   child: StreamBuilder<List<Map<String, dynamic>>>(
                     stream: postService.getAllPosts(),
@@ -144,54 +154,51 @@ void _syncGlobalPosts() async {
                       if (posts.isEmpty) {
                         return Center(child: Text('Aucun post trouvé.'));
                       }
-                      
+
                       return RefreshIndicator(
                         onRefresh: _refreshPosts,
                         child: ListView.builder(
-                        itemCount: posts.length,
-                        itemBuilder: (context, index) {
-                          final post = posts[index];
+                          itemCount: posts.length,
+                          itemBuilder: (context, index) {
+                            final post = posts[index];
 
-                          // Vérifie si le post a un 'postId' valide
-                          if (post['postId'] == null ||
-                              post['postId'] is! String) {
-                            print(
-                              "Post sans postId valide, génération d'un ID temporaire",
-                            );
-                            post['postId'] =
-                                DateTime.now().millisecondsSinceEpoch
-                                    .toString();
-                          }
-
-                          // Récupère l'ID du post
-                          String postId = getPostId(post['postId']);
-
-                          return _buildPost(
-                            photoUrl:
-                                post['photoUrl'] ?? 'assets/images/default.jpg',
-                            name: post['name'] ?? 'Utilisateur',
-                            location: post['location'] ?? 'Algérie',
-                            hashtag: post['hashtag'] ?? '',
-                            caption: post['caption'] ?? '',
-                            imageUrl: post['imageUrl'] ?? '',
-                            likes: post['likes'] ?? [],
-                            currentUserId:
-                                FirebaseAuth.instance.currentUser!.uid,
-                            postId: getPostId(post['postId']),
-                            userId: post['userId'],
-                            comments: post['comments'] ?? 0,
-                            shares: post['shares'] ?? 0,
-                            onLike: () async {
-                              final user = FirebaseAuth.instance.currentUser!;
-                              await postService.toggleLike(
-                                post['userId'],
-                                post['postId'],
-                                user.uid,
+                            // Vérifie si le post a un 'postId' valide
+                            if (post['postId'] == null ||
+                                post['postId'] is! String) {
+                              print(
+                                "Post sans postId valide, génération d'un ID temporaire",
                               );
-                            },
-                          );
-                        },
-  ),
+                              post['postId'] =
+                                  DateTime.now().millisecondsSinceEpoch
+                                      .toString();
+                            }
+
+                            // Récupère l'ID du post
+                            String postId = getPostId(post['postId']);
+
+                            return _buildPost(
+                              photoUrl:
+                                  post['photoUrl'] ??
+                                  'assets/images/default.jpg',
+                              name: post['name'] ?? 'Utilisateur',
+                              location: post['location'] ?? 'Algérie',
+                              hashtag: post['hashtag'] ?? '',
+                              caption: post['caption'] ?? '',
+                              imageUrl: post['imageUrl'] ?? '',
+                              likes:
+                                  (post['likes'] != null &&
+                                          post['likes'] is List)
+                                      ? post['likes'] as List
+                                      : <dynamic>[],
+                              currentUserId:
+                                  FirebaseAuth.instance.currentUser!.uid,
+                              postId: getPostId(post['postId']),
+                              userId: post['userId'],
+                              comments: post['comments'] ?? 0,
+                              shares: post['shares'] ?? 0,
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
@@ -235,7 +242,7 @@ void _syncGlobalPosts() async {
     );
   }
 
-  TextEditingController _hashtagController = TextEditingController();
+  final TextEditingController _hashtagController = TextEditingController();
 
   void _showPostDialog(BuildContext context) {
     showDialog(
@@ -244,7 +251,7 @@ void _syncGlobalPosts() async {
         bool isLoading = false;
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            Future<void> _publishPost() async {
+            Future<void> publishPost() async {
               if (_postController.text.isEmpty && _pickedImage == null) return;
 
               setStateDialog(() => isLoading = true);
@@ -270,7 +277,7 @@ void _syncGlobalPosts() async {
                         .doc(uid)
                         .get();
                 final userData = userDoc.data() ?? {};
-
+                if (!mounted) return;
                 setState(() {
                   _userPosts.insert(0, {
                     'photoUrl':
@@ -295,7 +302,7 @@ void _syncGlobalPosts() async {
                   hashtag: _hashtagController.text,
                   imageUrl: imageUrl,
                 );
-                
+
                 // Nettoyage des champs
                 _postController.clear();
                 _hashtagController.clear();
@@ -303,11 +310,10 @@ void _syncGlobalPosts() async {
 
                 Navigator.of(context).pop(); // Ferme le dialog
                 setStateDialog(() => isLoading = false);
-                
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text("Post publié avec succès !")),
                 );
-                
               } catch (e) {
                 setStateDialog(() => isLoading = false);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -468,7 +474,7 @@ void _syncGlobalPosts() async {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: isLoading ? null : _publishPost,
+                          onPressed: isLoading ? null : publishPost,
                           child:
                               isLoading
                                   ? SizedBox(
@@ -506,21 +512,20 @@ void _syncGlobalPosts() async {
     required String hashtag,
     required String caption,
     required String imageUrl,
-    required List likes, // liste des UID
+    required List likes,
     required String currentUserId,
     required String postId,
     required String userId,
     required int comments,
     required int shares,
-    required VoidCallback onLike,
   }) {
     return StatefulBuilder(
       builder: (context, setState) {
+        final FavoritesService favoritesService = FavoritesService();
         bool isLiked = likes.contains(currentUserId);
         int likeCount = likes.length;
         int commentCount = comments;
         int shareCount = shares;
-
         return GestureDetector(
           onTap: () {
             Navigator.push(
@@ -533,71 +538,86 @@ void _syncGlobalPosts() async {
                       hashtag: hashtag,
                       name: name,
                       location: location,
-                      likes: likes.length,
-                      comments: comments,
-                      shares: shares,
+                      likes: likes.cast<String>(),
+                      comments: commentCount,
+                      shares: shareCount,
                       postId: postId,
                       postOwnerUid: userId,
-                      ownerId: userId, // Ajout du paramètre requis
+                      ownerId: userId,
                     ),
               ),
             );
+            if (!mounted) return;
+            setState(() {});
           },
           child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 0,
+              // Décale le premier post pour qu'il colle au header
+            ),
+            decoration: BoxDecoration(
+              // Fond blanc pour la carte du post
+              borderRadius: BorderRadius.circular(16), // Coins arrondis
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-  children: [
-    FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.grey[300],
-          );
-        }
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final photoUrl = snapshot.data!['photoUrl'];
-          return CircleAvatar(
-            radius: 20,
-            backgroundImage: NetworkImage(photoUrl),
-          );
-        }
-        return CircleAvatar(
-          radius: 20,
-          backgroundImage: AssetImage('assets/images/default.png'),
-        );
-      },
-    ),
-    SizedBox(width: 10),
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          name,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        Text(
-          location,
-          style: TextStyle(
-            color: Color.fromARGB(255, 0, 143, 48),
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    ),
-  ],
-),
+                  children: [
+                    FutureBuilder<DocumentSnapshot>(
+                      future:
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userId)
+                              .get(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.grey[300],
+                          );
+                        }
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          final photoUrl = snapshot.data!['photoUrl'];
+                          return CircleAvatar(
+                            radius: 20,
+                            backgroundImage: NetworkImage(photoUrl),
+                          );
+                        }
+                        return CircleAvatar(
+                          radius: 20,
+                          backgroundImage: AssetImage(
+                            'assets/images/default.png',
+                          ),
+                        );
+                      },
+                    ),
+                    SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          location,
+                          style: TextStyle(
+                            color: Color.fromARGB(255, 0, 143, 48),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
 
                 SizedBox(height: 5),
                 RichText(
@@ -624,77 +644,46 @@ void _syncGlobalPosts() async {
                           : SizedBox(), // ou une image placeholder
                 ),
                 SizedBox(height: 5),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    InkWell(
-                      onTap: () async {
-                        // mets à jour Firestore
-                        await postService.toggleLike(
-                          userId,
-                          postId,
-                          currentUserId,
-                        );
-
-                        // mets à jour localement
-                        setState(() {
-                          if (isLiked) {
-                            likes.remove(currentUserId);
-                          } else {
-                            likes.add(currentUserId);
-                          }
-                        });
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.favorite,
-                            color:
-                                isLiked
-                                    ? Color.fromARGB(255, 255, 47, 92)
-                                    : Color.fromRGBO(80, 80, 80, 1),
-                          ),
-                          SizedBox(width: 5),
-                          Text(likes.length.toString()),
-                        ],
+                PostActionBar(
+                  ownerId: userId,
+                  postId: postId,
+                  initialLikes: likes.length,
+                  comments: comments,
+                  shares: shares,
+                  likedBy: Set<String>.from(
+                    likes.cast<String>(),
+                  ), // pour être sûr que c'est un Set<String>
+                  onCommentTap: () {
+                    // Navigation vers la page des commentaires ou autre action
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => PostDetailScreen(
+                              image: imageUrl,
+                              caption: caption,
+                              hashtag: hashtag,
+                              name: name,
+                              location: location,
+                              likes: likes.cast<String>(),
+                              comments: comments,
+                              shares: shares,
+                              postId: postId,
+                              postOwnerUid: userId,
+                              ownerId: userId,
+                            ),
                       ),
-                    ),
-
-                    InkWell(
-                      onTap: () {},
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.mode_comment_rounded,
-                            color: Color.fromRGBO(80, 80, 80, 1),
-                          ),
-                          SizedBox(width: 5),
-                          Text(commentCount.toString()),
-                        ],
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          shareCount += 1;
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Lien copié ou partagé !")),
-                        );
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.share,
-                            color: Color.fromRGBO(80, 80, 80, 1),
-                          ),
-                          SizedBox(width: 5),
-                          Text(shareCount.toString()),
-                        ],
-                      ),
-                    ),
-                  ],
+                    );
+                  },
+                  onLikeChanged: (bool isLikedNow, int newCount) {
+                     if (!mounted) return;
+    setState(() {
+      isLiked = isLikedNow;
+      likeCount = newCount;
+    });
+  },
                 ),
+
                 Divider(),
               ],
             ),
@@ -705,42 +694,41 @@ void _syncGlobalPosts() async {
   }
 
   Widget _buildSearchBar(BuildContext context) {
-  return GestureDetector(
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => SearchScreen()),
-      );
-    },
-    child: Container(
-      width: 300,
-      height: 45,
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 1),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color.fromARGB(255, 0, 143, 48),
-            Color.fromARGB(255, 0, 41, 14),
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search, color: Colors.white),
-          SizedBox(width: 8),
-          Text(
-            "Rechercher...",
-            style: TextStyle(color: Colors.white70,fontFamily: 'Quicksand'),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => SearchScreen()),
+        );
+      },
+      child: Container(
+        width: 300,
+        height: 45,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 1),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color.fromARGB(255, 0, 143, 48),
+              Color.fromARGB(255, 0, 41, 14),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
           ),
-        ],
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search, color: Colors.white),
+            SizedBox(width: 8),
+            Text(
+              "Rechercher...",
+              style: TextStyle(color: Colors.white70, fontFamily: 'Quicksand'),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 }
 
 Widget _buildCurvedHeader() {
@@ -766,9 +754,9 @@ Widget _buildCurvedHeader() {
           children: [
             CircleAvatar(
               backgroundColor: Colors.transparent,
-              child: Icon(Icons.eco_rounded, color: Colors.green),
+              child: Image.asset('assets/icon.png', width: 28, height: 28),
             ),
-            SizedBox(width: 10),
+            SizedBox(width: 5),
             Text(
               "Algrinova",
               style: TextStyle(

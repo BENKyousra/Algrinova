@@ -9,7 +9,7 @@ class Details extends StatefulWidget {
   final ProductModel product;
   final List<String> careInstructions;
 
-  Details({
+  const Details({
     super.key,
     required this.product,
     required this.careInstructions,
@@ -20,7 +20,7 @@ class Details extends StatefulWidget {
 }
 
 class _DetailsState extends State<Details> {
-  int _currentImageIndex = 0;
+  final int _currentImageIndex = 0;
   final FavoritesService _favoritesService = FavoritesService();
 
   bool _isLiked = false;
@@ -177,7 +177,7 @@ class _DetailsState extends State<Details> {
 
             if (widget.careInstructions.isNotEmpty) ...[
               const Text(
-                "Conseils d'entretien",
+                "Care Instructions",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -310,7 +310,6 @@ class _FullScreenImageGalleryState extends State<FullScreenImageGallery> {
     )
   ],
 ),
-
     );
   }
 }

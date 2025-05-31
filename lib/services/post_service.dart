@@ -76,28 +76,6 @@ Future<void> syncAllPostsToGlobalCollection() async {
   }
 }
 
-  Future<void> toggleLike(String ownerId, String postId, String userId) async {
-    DocumentReference postRef = _firestore
-        .collection('posts')
-        .doc(ownerId)
-        .collection('userPosts')
-        .doc(postId);
-
-    DocumentSnapshot postSnapshot = await postRef.get();
-    List<dynamic> currentLikes = (postSnapshot.data() as Map<String, dynamic>?)?['likes'] ?? [];
-
-    if (currentLikes.contains(ownerId)) {
-      // Déjà liké → supprimer l'UID
-      await postRef.update({
-        'likes': FieldValue.arrayRemove([userId]),
-      });
-    } else {
-      // Pas encore liké → ajouter l'UID
-      await postRef.update({
-        'likes': FieldValue.arrayUnion([userId]),
-      });
-    }
-  }
 
   Future<void> addComment({
     required String ownerId,

@@ -1,3 +1,4 @@
+import 'package:algrinova/services/chat_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:algrinova/screens/chat/message_screen.dart';
@@ -8,7 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 class ChatScreen extends StatefulWidget {
   final String? expertId;
   final String? expertEmail;
-  final bool _isVisible = true;
 
   const ChatScreen({super.key, this.expertId, this.expertEmail});
 
@@ -124,12 +124,11 @@ class ChatScreenState extends State<ChatScreen> {
   }
 
   @override
-void dispose() {
-  _updateUserStatus(false);
-  _scrollController.dispose(); // Très important si tu l'as initialisé
-  super.dispose();
-}
-
+  void dispose() {
+    _updateUserStatus(false);
+    _scrollController.dispose(); // Très important si tu l'as initialisé
+    super.dispose();
+  }
 
   // دالة محدثة مع معالجة الأخطاء
   Future<void> _updateUserStatus(bool isOnline) async {
@@ -230,9 +229,9 @@ void dispose() {
             children: [
               CircleAvatar(
                 backgroundColor: Colors.transparent,
-                child: Icon(Icons.eco_rounded, color: Colors.green),
+                child: Image.asset('assets/icon.png', width: 28, height: 28),
               ),
-              SizedBox(width: 10),
+              SizedBox(width: 5),
               Text(
                 "Algrinova",
                 style: TextStyle(
@@ -328,22 +327,21 @@ void dispose() {
 
         return FutureBuilder<List<ChatPartner?>>(
           future: Future.wait(
-  chatRoomsSnapshot.data!.docs.map((chatRoom) async {
-    final participants =
-        (chatRoom['participants'] as List<dynamic>).cast<String>();
-    final partnerId = participants.firstWhere(
-      (id) => id != currentUserId,
-    );
+            chatRoomsSnapshot.data!.docs.map((chatRoom) async {
+              final participants =
+                  (chatRoom['participants'] as List<dynamic>).cast<String>();
+              final partnerId = participants.firstWhere(
+                (id) => id != currentUserId,
+              );
 
-    final partner = await _getChatPartnerDetails(partnerId);
+              final partner = await _getChatPartnerDetails(partnerId);
 
-    // ✅ Vérifie que le widget est toujours monté avant de retourner quoi que ce soit
-    if (!mounted) return null;
+              // ✅ Vérifie que le widget est toujours monté avant de retourner quoi que ce soit
+              if (!mounted) return null;
 
-    return partner;
-  }).toList(),
-),
-
+              return partner;
+            }).toList(),
+          ),
 
           builder: (context, partnersSnapshot) {
             if (partnersSnapshot.connectionState == ConnectionState.waiting) {
@@ -371,6 +369,7 @@ void dispose() {
               itemCount: filteredPartners.length,
 
               itemBuilder: (context, index) {
+                final chatService = ChatService();
                 final partner = filteredPartners[index]!;
                 final chatRoom = chatRoomsSnapshot.data!.docs[index];
                 final lastMessage =
@@ -390,46 +389,11 @@ void dispose() {
                     child: const Icon(Icons.delete, color: Colors.white),
                   ),
                   confirmDismiss: (direction) async {
-                    // تأكيد قبل الحذف (اختياري)
-                    return await showDialog(
+                    return await chatService.deleteChat(
                       context: context,
-                      builder:
-                          (context) => AlertDialog(
-                            title: const Text('Delete confirmation'),
-                            content: const Text(
-                              'Do you want to delete this conversation?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed:
-                                    () => Navigator.of(context).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed:
-                                    () => Navigator.of(context).pop(true),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                ),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
+                      chatRoomId: chatRoom.id,
+                      partnerName: partner.name,
                     );
-                  },
-                  onDismissed: (direction) async {
-                    await FirebaseFirestore.instance
-                        .collection('chatRooms')
-                        .doc(chatRoom.id)
-                        .delete();
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('تم حذف المحادثة مع ${partner.name}'),
-                        ),
-                      );
-                    }
                   },
                   child: ListTile(
                     leading: CircleAvatar(
@@ -525,23 +489,6 @@ void dispose() {
         );
       },
     );
-  }
-
-  String _formatTimestamp(Timestamp? timestamp) {
-    if (timestamp == null) return '';
-    final dateTime = timestamp.toDate();
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays >= 1) {
-      return "${difference.inDays}j";
-    } else if (difference.inHours >= 1) {
-      return "${difference.inHours}h";
-    } else if (difference.inMinutes >= 1) {
-      return "${difference.inMinutes}m";
-    } else {
-      return "maintenant";
-    }
   }
 
   Widget _buildOnlineUsersList() {
@@ -699,7 +646,6 @@ void dispose() {
 
       yield partners;
       await Future.delayed(const Duration(seconds: 1));
-      
     }
   }
 

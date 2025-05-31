@@ -9,6 +9,8 @@ import 'package:algrinova/services/user_service.dart';
 final UserService _userService = UserService();
 
 class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }

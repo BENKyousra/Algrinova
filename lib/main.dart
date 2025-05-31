@@ -1,6 +1,7 @@
 import 'package:algrinova/l10n/generated/l10n.dart';
 import 'package:algrinova/services/auth_service.dart';
 import 'package:algrinova/services/user_service.dart';
+import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:algrinova/screens/home/home_screen.dart';
@@ -16,6 +17,7 @@ import 'package:algrinova/provider/cart_provider.dart';
 import 'package:algrinova/screens/chat/chat_screen.dart';
 import 'package:algrinova/screens/profile/profile_my_screen.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:algrinova/screens/chat/message_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,13 +25,13 @@ void main() async {
 
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor: const Color.fromARGB(0, 0, 0, 0),
       statusBarIconBrightness: Brightness.light,
       systemNavigationBarColor: Colors.black,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
-  
+
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug,
     appleProvider: AppleProvider.debug,
@@ -51,6 +53,8 @@ class AlgrinovaApp extends StatefulWidget {
   );
   static final localeNotifier = ValueNotifier<Locale>(Locale('en'));
 
+  const AlgrinovaApp({super.key});
+
   @override
   State<AlgrinovaApp> createState() => _AlgrinovaAppState();
 }
@@ -61,14 +65,29 @@ class _AlgrinovaAppState extends State<AlgrinovaApp>
   String? userRole;
   String? userId;
   bool isLoading = true;
+  String? _initialDeepLink;
+
 
   @override
   void initState() {
     super.initState();
+    _getInitialDynamicLink();
     WidgetsBinding.instance.addObserver(this);
     _listenToAuthChanges();
     checkUserRole();
   }
+
+  Future<void> _getInitialDynamicLink() async {
+  final PendingDynamicLinkData? data = await FirebaseDynamicLinks.instance.getInitialLink();
+  final Uri? deepLink = data?.link;
+
+  if (deepLink != null) {
+    setState(() {
+      _initialDeepLink = deepLink.toString();
+    });
+  }
+}
+
 
   void _listenToAuthChanges() {
     FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -135,17 +154,29 @@ class _AlgrinovaAppState extends State<AlgrinovaApp>
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
             Widget homeScreen;
-            final user = snapshot.data;
+final user = snapshot.data;
 
-            if (userRole == 'expert') {
-              homeScreen = HomeScreen(); //ExpertProfileMyScreen(expertId: user?.uid ?? '');
-            } else if (userRole == 'user') {
-              homeScreen = HomeScreen(); //ProfileMyScreen();
-            } else if (user == null) {
-              homeScreen = LoginScreen();
-            } else {
-              homeScreen = LoginScreen();
-            }
+if (_initialDeepLink != null) {
+  final uri = Uri.parse(_initialDeepLink!);
+
+  if (uri.pathSegments.contains('expert') && uri.pathSegments.length >= 2) {
+    final expertId = uri.pathSegments[1];
+    homeScreen = ExpertProfileMyScreen(expertId: expertId);
+  } else {
+    homeScreen = LoginScreen();
+  }
+} else {
+  if (userRole == 'expert') {
+    homeScreen = HomeScreen();
+  } else if (userRole == 'user') {
+    homeScreen = HomeScreen();
+  } else if (user == null) {
+    homeScreen = LoginScreen();
+  } else {
+    homeScreen = LoginScreen();
+  }
+}
+
 
             return MaterialApp(
               locale: AlgrinovaApp.localeNotifier.value,
@@ -183,6 +214,20 @@ class _AlgrinovaAppState extends State<AlgrinovaApp>
                 '/experts': (context) => ExpertsScreen(),
                 '/store': (context) => StoreScreen(),
                 '/chat': (context) => ChatScreen(),
+                '/message': (context) {
+                  final args =
+                      ModalRoute.of(context)?.settings.arguments
+                          as Map<String, dynamic>? ??
+                      {};
+                  return MessageScreen(
+                    receiverUserId: args['userId'] ?? '',
+                    receiverUserEmail: args['userEmail'] ?? '',
+                    receiverUserphotoUrl: args['userPhotoUrl'] ?? '',
+                    receivername:
+                        args['userName'] ??
+                        '', // TODO: Provide actual user name
+                  );
+                },
                 '/profile':
                     (context) =>
                         userRole == 'expert'

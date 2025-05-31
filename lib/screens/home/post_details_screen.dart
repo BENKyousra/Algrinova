@@ -1,4 +1,4 @@
-import 'package:algrinova/screens/home/home_screen.dart';
+import 'package:algrinova/widgets/post_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,7 +12,7 @@ class PostDetailScreen extends StatefulWidget {
   final String hashtag;
   final String caption;
   final String image;
-  final int likes;
+final List<String> likes;
   final int comments;
   final int shares;
   final bool scrollToComment;
@@ -22,7 +22,7 @@ class PostDetailScreen extends StatefulWidget {
 
   // Removed incorrect PostDetailsScreen constructor
 
-  const PostDetailScreen({
+  const PostDetailScreen({super.key, 
     required this.name,
     required this.location,
     required this.hashtag,
@@ -86,6 +86,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       'text': data['text'] ?? '',
     });
   }
+  if (!mounted) return;
   setState(() {
     commentList = loadedComments;
   });
@@ -105,10 +106,11 @@ void initState() {
   ownerId = widget.ownerId;
     postId = widget.postId;
    _fetchUserPhotoUrl().then((_) {
-    setState(() {
-      isLoadingPostData = false;
-    });
-  });
+     if (!mounted) return;
+     setState(() {
+       isLoadingPostData = false;
+     });
+   });
   commentList = [];
 
   _loadPostData(); // Nouvelle fonction
@@ -125,12 +127,13 @@ void initState() {
 void _loadPostData() async {
   final doc = await FirebaseFirestore.instance
       .collection('posts')
-      .doc(widget.postOwnerUid)
+      .doc(ownerId)
       .collection('userPosts')
-      .doc(widget.postId)
+      .doc(postId)
       .get();
 
   if (doc.exists) {
+    if (!mounted) return;
     setState(() {
       caption = doc['caption'];
       hashtag = doc['hashtag'];
@@ -146,6 +149,7 @@ Future<void> _fetchUserPhotoUrl() async {
       .get();
 
   if (doc.exists) {
+    if (!mounted) return;
     setState(() {
       _currentPhotoUrl = doc['photoUrl'];
     });
@@ -168,7 +172,7 @@ Future<void> _fetchUserPhotoUrl() async {
   final name = currentUserInfo['name'];
   final photoUrl = currentUserInfo['photoUrl'];
   final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonyme';
-
+if (!mounted) return;
   // 🔹 Affichage visuel
   setState(() {
     commentList.add({
@@ -227,13 +231,19 @@ void _confirmDeletePost() async {
   if (confirm == true) {
     await FirebaseFirestore.instance
         .collection('posts')
-        .doc(widget.postOwnerUid)
-        .collection('userPosts')
-        .doc(widget.postId)
+          .doc(ownerId)
+          .collection('userPosts')
+          .doc(postId)
         .delete();
-    await FirebaseFirestore.instance
+        await FirebaseFirestore.instance
         .collection('allPosts')
-        .doc(widget.postId)
+          .doc(postId)  
+        .delete();
+        await FirebaseFirestore.instance
+        .collection('favorites')
+          .doc(ownerId) 
+           .collection('likedPosts')
+          .doc(postId)
         .delete();
 
     Navigator.pop(context); // Retour à l'écran précédent
@@ -278,14 +288,14 @@ void _showEditDialog() {
 
             await FirebaseFirestore.instance
                 .collection('posts')
-                .doc(widget.postOwnerUid)
-                .collection('userPosts')
-                .doc(widget.postId)
+          .doc(ownerId)
+          .collection('userPosts')
+          .doc(postId)
                 .update({
               'caption': newCaption,
               'hashtag': newHashtag,
             });
-
+if (!mounted) return;
             setState(() {
               caption = newCaption;
               hashtag = newHashtag;
@@ -421,68 +431,27 @@ void _showEditDialog() {
                     ),
                   SizedBox(height: 10),
                   // Bar d'actions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [InkWell(
-                      onTap: () async {
-                        // Récupère l'ID de l'utilisateur courant
-                        final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-                        if (currentUserId == null) return;
-                        
-                        // mets à jour Firestore
-                              await postService.toggleLike(
-                                  widget.ownerId,     // ✅ Propriétaire du post
-                                  widget.postId,      // ✅ ID du post
-                                  currentUserId,      // ✅ Utilisateur qui like
-                                  );
-                        // mets à jour localement
-                        setState(() {
-                          if (isLiked) {
-                            likes.remove(currentUserId);
-                          } else {
-                            likes.add(currentUserId);
-                          }
-                        });
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.favorite,
-                            color:
-                                isLiked
-                                    ? Color.fromARGB(255, 255, 47, 92)
-                                    : Color.fromRGBO(80, 80, 80, 1),
-                          ),
-                          SizedBox(width: 5),
-                          Text(likes.length.toString()),
-                        ],
-                      ),
-                    ),
-                      InkWell(
-                        onTap: _addComment,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.mode_comment_rounded,
-                              color:Color.fromRGBO(80, 80, 80, 1),
-                            ),
-                            SizedBox(width: 5),
-                            Text(widget.comments.toString()),
-                          ],
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () {},
-                        child: Row(
-                          children: [
-                            Icon(Icons.share, color: Color.fromRGBO(80, 80, 80, 1)),
-                            SizedBox(width: 5),
-                            Text(widget.shares.toString()),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  PostActionBar(
+  ownerId: widget.ownerId,
+  postId: widget.postId,
+  initialLikes: widget.likes.length,
+  comments: widget.comments,
+  shares: widget.shares,
+  likedBy: widget.likes.toSet(), // Convertir la liste en set
+  onCommentTap: () {
+    // Si tu veux faire défiler jusqu’au champ de commentaire
+    if (widget.scrollToComment) {
+      Future.delayed(Duration(milliseconds: 300), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  },
+),
+
                   SizedBox(height: 5),
                   Divider(thickness: 0.8, color: Colors.grey[300]),
                   SizedBox(height: 5),
@@ -542,7 +511,7 @@ void _showEditDialog() {
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),
