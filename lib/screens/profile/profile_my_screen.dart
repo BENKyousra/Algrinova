@@ -32,6 +32,11 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
       _userFuture = userService.getUserProfile(uid);
     }
   }
+  
+  Future<void> _refreshPosts() async {
+     if (!mounted) return;
+    setState(() {}); // Force le rebuild, relance le StreamBuilder
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,25 +163,25 @@ class _ProfileScreenMyState extends State<ProfileMyScreen> {
                                                 as ImageProvider,
                                   ),
                                 ),
-                                Positioned(
-                                  bottom: 6,
-                                  right: 6,
-                                  child: Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          data['isOnline'] == true
-                                              ? Colors.green
-                                              : Colors.grey,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                // Positioned(
+                                //   bottom: 6,
+                                //   right: 6,
+                                //   child: Container(
+                                //     width: 18,
+                                //     height: 18,
+                                //     decoration: BoxDecoration(
+                                //       color:
+                                //           data['isOnline'] == true
+                                //               ? Colors.green
+                                //               : Colors.grey,
+                                //       shape: BoxShape.circle,
+                                //       border: Border.all(
+                                //         color: Colors.white,
+                                //         width: 2,
+                                //       ),
+                                //     ),
+                                //   ),
+                                // ),
                               ],
                             ),
                           ),

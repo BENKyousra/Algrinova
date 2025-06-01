@@ -160,6 +160,7 @@ void _handleDeepLink(Uri? deepLink) async {
       await postRef.update({
         'likes': FieldValue.arrayRemove([userId]),
       });
+      await likedPostRef.delete(); 
     } else {
       // Ajouter le like
       await postRef.update({
@@ -190,7 +191,22 @@ void _handleDeepLink(Uri? deepLink) async {
 void sharePost(String uid, String postId) async {
   final link = await DynamicLinkService.createDynamicLink(uid: uid, postId: postId);
   Share.share("🌿 Viens voir ce post sur Algrinova ! $link");
+  final postRef = _firestore
+      .collection('posts')
+      .doc(uid)
+      .collection('userPosts')
+      .doc(postId);
+
+  await postRef.update({
+    'shares': FieldValue.increment(1),
+  });
+
+  if (!mounted) return;
+  setState(() {
+    postData?['shares'] = (postData?['shares'] ?? 0) + 1;
+  });
 }
+
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +231,6 @@ void sharePost(String uid, String postId) async {
           ),
         ),
 
-        // Commentaire
         InkWell(
           onTap: widget.onCommentTap,
           child: Row(
@@ -229,16 +244,14 @@ void sharePost(String uid, String postId) async {
             ],
           ),
         ),
-
-        // Share (non fonctionnel ici)
         InkWell(
           onTap: () => sharePost(widget.ownerId, widget.postId),
-
           child: Row(
             children: [
               Icon(Icons.share, color: Color.fromRGBO(80, 80, 80, 1)),
               SizedBox(width: 5),
-              Text(widget.shares.toString()),
+              Text((postData?['shares'] ?? widget.shares).toString()),
+
             ],
           ),
         ),

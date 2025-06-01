@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algrinova/screens/profile/profile_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-
+import 'package:algrinova/screens/home/post_details_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -22,7 +21,6 @@ class _SearchScreenState extends State<SearchScreen>
     _tabController = TabController(length: 3, vsync: this);
   }
 
-
   Future<List<Map<String, dynamic>>> _searchPosts(String query) async {
     if (query.isEmpty) return [];
     final snapshot =
@@ -40,33 +38,37 @@ class _SearchScreenState extends State<SearchScreen>
     final snapshot =
         await _firestore
             .collection('allPosts')
-            .where('hashtag', arrayContains: query.toLowerCase())
+            .where('hashtag', isGreaterThanOrEqualTo: query)
+            .where('hashtag', isLessThanOrEqualTo: '$query\uf8ff')
             .get();
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
-Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
-  // Appel Firestore pour récupérer les users correspondant à la recherche
-  QuerySnapshot snapshot = await FirebaseFirestore.instance
-      .collection('users')
-      .where('name', isGreaterThanOrEqualTo: query)
-      .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-      .get();
 
-  // Transforme les docs en List<Map<String, dynamic>>
-  List<Map<String, dynamic>> results = snapshot.docs.map((doc) {
-    return {
-      'uid': doc.id,
-      'name': doc['name'],
-      'photoUrl': doc['photoUrl'] ?? '',
-    };
-  }).toList();
+  Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
+    // Appel Firestore pour récupérer les users correspondant à la recherche
+    QuerySnapshot snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .where('name', isGreaterThanOrEqualTo: query)
+            .where('name', isLessThanOrEqualTo: '$query\uf8ff')
+            .get();
 
-  return results;
-}
+    // Transforme les docs en List<Map<String, dynamic>>
+    List<Map<String, dynamic>> results =
+        snapshot.docs.map((doc) {
+          return {
+            'uid': doc.id,
+            'name': doc['name'],
+            'photoUrl': doc['photoUrl'] ?? '',
+          };
+        }).toList();
+
+    return results;
+  }
 
   // الواجهات الفرعية لكل تبويب
   Widget _emptyState(String message) => Center(child: Text(message));
-  
+
   Widget _buildUsersTab() {
     if (_searchQuery.isEmpty) {
       return _emptyState("Start typing to search users");
@@ -87,7 +89,8 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
           print("${u['name']} - ${u['uid']}");
         }
         final currentUid = FirebaseAuth.instance.currentUser!.uid;
-        final filteredUsers = users.where((u) => u['uid'] != currentUid).toList();
+        final filteredUsers =
+            users.where((u) => u['uid'] != currentUid).toList();
         List<Map<String, dynamic>> searchResults = filteredUsers;
         return ListView.separated(
           padding: const EdgeInsets.all(12),
@@ -105,18 +108,16 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
               ),
               title: Text(user['name'] ?? ''),
               onTap: () {
-  final clickedUid = user['uid'];
-  print('User cliqué : ${user['name']} / uid: $clickedUid');
+                final clickedUid = user['uid'];
+                print('User cliqué : ${user['name']} / uid: $clickedUid');
 
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ProfileScreen(uid: clickedUid), // 🔥 ICI
-    ),
-  );
-}
-
-
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(uid: clickedUid), // 🔥 ICI
+                  ),
+                );
+              },
             );
           },
         );
@@ -149,6 +150,14 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
                 post['imageUrl'] ??
                 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
             final caption = post['caption'] ?? '';
+            final hashtag = post['hashtag'] ?? [];
+            final name = post['name'] ?? '';
+            final location = post['location'] ?? '';
+            final likes = post['likes'] ?? [];
+            final comments = post['comments'] ?? [];
+            final shares = post['shares'] ?? [];
+            final postId = post['postId'] ?? '';
+            final userId = post['userId'] ?? '';
 
             return ListTile(
               leading: ClipRRect(
@@ -161,7 +170,27 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
                 ),
               ),
               title: Text(caption),
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => PostDetailScreen(
+                          image: imageUrl,
+                          caption: caption,
+                          hashtag: hashtag,
+                          name: name,
+                          location: location,
+                          likes: List<String>.from(likes),
+                          comments: comments,
+                          shares: shares,
+                          postId: postId,
+                          postOwnerUid: userId,
+                          ownerId: userId,
+                        ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -191,11 +220,40 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
           itemBuilder: (context, index) {
             final hashtagDoc = hashtag[index];
             final caption = hashtagDoc['caption'] ?? '';
-            final tagsList = List<String>.from(hashtagDoc['hashtag'] ?? []);
+            final tagsList = hashtagDoc['hashtag'] ?? [];
+            final imageUrl = hashtagDoc['imageUrl'] ??
+                'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
+            final name = hashtagDoc['name'] ?? '';
+            final location = hashtagDoc['location'] ?? '';
+            final likes = hashtagDoc['likes'] ?? [];
+            final comments = hashtagDoc['comments'] ?? [];
+            final shares = hashtagDoc['shares'] ?? [];
+            final postId = hashtagDoc['postId'] ?? '';
+            final userId = hashtagDoc['userId'] ?? '';
+
             return ListTile(
-              title: Text(caption),
-              subtitle: Text(tagsList.map((tag) => '#$tag').join(' ')),
-              onTap: () {},
+              title: Text(tagsList is List ? tagsList.join(', ') : tagsList.toString()),
+              subtitle: Text(caption),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PostDetailScreen(
+                      image: imageUrl,
+                      caption: caption,
+                      hashtag: tagsList is List && tagsList.isNotEmpty ? tagsList.first.toString() : '',
+                      name: name,
+                      location: location,
+                      likes: List<String>.from(likes),
+                      comments: comments,
+                      shares: shares,
+                      postId: postId,
+                      postOwnerUid: userId,
+                      ownerId: userId,
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -299,15 +357,10 @@ Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
           child: Row(
             children: [
               CircleAvatar(
-              backgroundColor: Colors.transparent,
-              child: Image.asset(
-  'assets/icon.png',
-  width: 28,
-  height: 28,
-),
-
-            ),
-            SizedBox(width: 5),
+                backgroundColor: Colors.transparent,
+                child: Image.asset('assets/icon.png', width: 28, height: 28),
+              ),
+              SizedBox(width: 5),
               Text(
                 "Algrinova",
                 style: TextStyle(
@@ -361,8 +414,10 @@ class CustomSearchBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color.fromARGB(255, 0, 143, 48),
-            Color.fromARGB(255, 0, 41, 14),],
+          colors: [
+            Color.fromARGB(255, 0, 143, 48),
+            Color.fromARGB(255, 0, 41, 14),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
